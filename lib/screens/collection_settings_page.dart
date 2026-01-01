@@ -70,8 +70,7 @@ class _CollectionSettingsPageState extends State<CollectionSettingsPage> {
     setState(() {
       _filteredWords = _allWords.where((word) {
         return word.word.toLowerCase().contains(lowerQuery) ||
-               word.meaningTr.toLowerCase().contains(lowerQuery) ||
-               word.definition.toLowerCase().contains(lowerQuery);
+               word.meaningTr.toLowerCase().contains(lowerQuery);
       }).toList();
     });
   }
