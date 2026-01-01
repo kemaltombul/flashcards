@@ -54,6 +54,13 @@ A modern, dark-themed Flutter application designed to help users learn English v
     flutter run
     ```
 
+### Generating App Icons
+
+If you want to update or regenerate the app icons, run:
+```bash
+dart run flutter_launcher_icons
+```
+
 ## 📂 Project Structure
 
 -   `lib/models/`: Data models (`Word`, `Collection`).

@@ -7,7 +7,7 @@
 
     <application
         android:label="Flash Cards"
-        android:icon="@drawable/nicon"
+        android:icon="@mipmap/launcher_icon"
         android:name="${applicationName}">
 
         <activity
