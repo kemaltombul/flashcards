@@ -30,7 +30,7 @@ class _AddWordPageState extends State<AddWordPage> {
         title: const Text("Add Word"),
         centerTitle: true,
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black87,
+        foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
@@ -92,10 +92,10 @@ class _AddWordPageState extends State<AddWordPage> {
             constraints: const BoxConstraints(maxWidth: 450, maxHeight: 800),
             margin: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: const Color(0xFF1E1E1E), // Dark card color
               borderRadius: BorderRadius.circular(40),
-              border: Border.all(color: Colors.grey.shade800, width: 6),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 20)],
+              border: Border.all(color: Colors.grey.shade800, width: 2),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20)],
             ),
             child: ClipRRect(
               borderRadius: const BorderRadius.all(Radius.circular(34)),
@@ -112,15 +112,17 @@ class _AddWordPageState extends State<AddWordPage> {
   Widget _buildModernTextField({required TextEditingController controller, required String label, required IconData icon, int maxLines = 1}) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: const Color(0xFF2C2C2C), // Dark input background
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 10, offset: const Offset(0, 4))],
+        border: Border.all(color: Colors.white10),
       ),
       child: TextField(
         controller: controller,
         maxLines: maxLines,
+        style: const TextStyle(color: Colors.white), // Explicit white text
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: TextStyle(color: Colors.grey.shade400),
           prefixIcon: Icon(icon, color: Colors.deepPurpleAccent),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
           filled: true,
