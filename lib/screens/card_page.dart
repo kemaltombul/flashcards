@@ -180,9 +180,12 @@ class _VocabularyCardPageState extends State<VocabularyCardPage> {
         children: [
           Positioned.fill(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 1000),
-              switchInCurve: Curves.easeInOut,
-              switchOutCurve: Curves.easeInOut,
+              duration: const Duration(milliseconds: 1500),
+              switchInCurve: Curves.easeInOutCubic,
+              switchOutCurve: Curves.easeInOutCubic,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(opacity: animation, child: child);
+              },
               child: Container(
                 key: ValueKey<String>(_currentBackground),
                 decoration: BoxDecoration(
