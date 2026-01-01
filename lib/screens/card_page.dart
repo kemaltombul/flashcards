@@ -327,59 +327,69 @@ class _VocabularyCardPageState extends State<VocabularyCardPage> {
 
   /// Builds the glassmorphism card displaying the word.
   Widget _buildGlassCard(Word word) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          width: 320,
-          padding: const EdgeInsets.all(30),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.2),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8))
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("WORD", style: TextStyle(fontSize: 12, color: Colors.white70, letterSpacing: 2)),
-              const SizedBox(height: 5),
-              Text(word.word, textAlign: TextAlign.center, style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 15),
-              const Divider(color: Colors.white30, thickness: 1),
-              const SizedBox(height: 15),
-              const Text("DEFINITION", style: TextStyle(fontSize: 12, color: Colors.white60)),
-              const SizedBox(height: 5),
-              Text(word.definition, textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.white.withValues(alpha: 0.9))),
-              const SizedBox(height: 20),
-
-              if (!widget.isGame) ...[
-                AnimatedOpacity(
-                  duration: _showMeaning ? const Duration(milliseconds: 500) : Duration.zero,
-                  opacity: _showMeaning ? 1.0 : 0.0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.deepPurpleAccent.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.5))),
-                    child: Text(word.meaningTr, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                
-                if (!_showMeaning)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6.0),
-                    child: Text(
-                      "Waiting for hint...",
-                      style: TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
+    return GestureDetector(
+      onTap: () {
+        if (!widget.isGame && !_showMeaning) {
+          _timer?.cancel();
+          setState(() {
+            _showMeaning = true;
+          });
+        }
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            width: 320,
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.2),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8))
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("WORD", style: TextStyle(fontSize: 12, color: Colors.white70, letterSpacing: 2)),
+                const SizedBox(height: 5),
+                Text(word.word, textAlign: TextAlign.center, style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 15),
+                const Divider(color: Colors.white30, thickness: 1),
+                const SizedBox(height: 15),
+                const Text("DEFINITION", style: TextStyle(fontSize: 12, color: Colors.white60)),
+                const SizedBox(height: 5),
+                Text(word.definition, textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.white.withValues(alpha: 0.9))),
+                const SizedBox(height: 20),
+  
+                if (!widget.isGame) ...[
+                  AnimatedOpacity(
+                    duration: _showMeaning ? const Duration(milliseconds: 500) : Duration.zero,
+                    opacity: _showMeaning ? 1.0 : 0.0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.deepPurpleAccent.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.5))),
+                      child: Text(word.meaningTr, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
+                  
+                  if (!_showMeaning)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6.0),
+                      child: Text(
+                        "Tap to reveal / Waiting...",
+                        style: TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                ],
+  
+                const SizedBox(height: 20),
+                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(15)), child: Text("“${word.example}”", textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.white.withValues(alpha: 0.85), fontStyle: FontStyle.italic))),
               ],
-
-              const SizedBox(height: 20),
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(15)), child: Text("“${word.example}”", textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.white.withValues(alpha: 0.85), fontStyle: FontStyle.italic))),
-            ],
+            ),
           ),
         ),
       ),
