@@ -9,8 +9,8 @@ A modern, dark-themed Flutter application designed to help users learn English v
     -   English Word & Definition
     -   Turkish Meaning (or your native language)
     -   Example Sentences
--   **📚 Study Mode:** Flip cards to reveal meanings and learn at your own pace.
--   **⏳ Game Mode:** Test yourself with a timer! Meaning is hidden until the timer runs out or you feel ready.
+-   **📚 Study Mode:** Flip cards to reveal meanings. The meaning is automatically revealed after 15 seconds if you don't flip it yourself, helping you recall the word within a specific timeframe.
+-   **⏳ Game Mode:** Designed for group play! The person whose turn it is holds the phone and tries to explain the word on the screen to others without saying the word itself. Perfect for practicing speaking and descriptions.
 -   **🎨 Modern UI:** Sleek dark mode with glassmorphism effects and fluid animations.
 -   **💾 data Persistence:** Uses SQLite (`sqflite`) for local storage.
 -   **📤 Import/Export:** Backup and share your collections using JSON.

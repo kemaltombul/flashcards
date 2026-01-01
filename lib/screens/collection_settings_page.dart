@@ -120,7 +120,7 @@ class _CollectionSettingsPageState extends State<CollectionSettingsPage> {
             child: SwitchListTile(
               title: const Text("Game Mode", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text(
-                _isGameMode ? "Status: Timer ON, Hidden" : "Status: Study Mode (Visible)",
+                _isGameMode ? "Status: Meanings are hidden" : "Status: Meanings are visible for training",
                 style: const TextStyle(color: Colors.white54, fontSize: 12),
               ),
               value: _isGameMode,
