@@ -301,6 +301,11 @@ class _HomePageState extends State<HomePage> {
 
   /// Builds a single collection card with gestures.
   Widget _buildDarkCard(Collection collection) {
+    // Styling based on mode
+    final Color borderColor = collection.isGame ? Colors.orangeAccent.withValues(alpha: 0.5) : Colors.blueAccent.withValues(alpha: 0.3);
+    final IconData modeIcon = collection.isGame ? Icons.gamepad_outlined : Icons.menu_book_rounded;
+    final Color iconColor = collection.isGame ? Colors.orangeAccent : Colors.blueAccent;
+
     return GestureDetector(
       onTap: () async {
         int count = await _dbService.getWordCount(collection.id!);
@@ -332,12 +337,12 @@ class _HomePageState extends State<HomePage> {
         decoration: BoxDecoration(
           color: _cardColor,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(color: borderColor, width: 1.5),
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))],
         ),
         child: Stack(
           children: [
-            Positioned(right: -10, bottom: -10, child: Icon(Icons.folder, size: 80, color: Colors.white.withValues(alpha: 0.03))),
+            Positioned(right: -10, bottom: -10, child: Icon(modeIcon, size: 80, color: Colors.white.withValues(alpha: 0.03))),
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -347,7 +352,7 @@ class _HomePageState extends State<HomePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: _accentColor.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(Icons.folder_open, color: _accentColor, size: 18)),
+                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(modeIcon, color: iconColor, size: 18)),
                       InkWell(
                         onTap: () async {
                           await _dbService.toggleFavorite(collection.id!, collection.isFavorite);
