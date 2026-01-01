@@ -140,6 +140,17 @@ class DatabaseService {
     );
   }
 
+  /// Updates the name of a collection.
+  Future<void> updateCollectionName(int id, String newName) async {
+    final db = await database;
+    await db.update(
+      'collections',
+      {'name': newName},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // =======================================================================
   // Word Operations
   // =======================================================================
