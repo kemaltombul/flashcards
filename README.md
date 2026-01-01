@@ -19,7 +19,7 @@ A modern, dark-themed Flutter application designed to help users learn English v
 
 | Home Page | Card View | Add Word |
 |:---------:|:---------:|:--------:|
-| *Add screenshot here* | *Add screenshot here* | *Add screenshot here* |
+| ![Home Page](assets/screenshots/home.png) | ![Card View](assets/screenshots/card.png) | ![Add Word](assets/screenshots/add_word.png) |
 
 ## 🛠 Tech Stack
 
