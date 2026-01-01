@@ -376,14 +376,17 @@ class _VocabularyCardPageState extends State<VocabularyCardPage> {
                     ),
                   ),
                   
-                  if (!_showMeaning)
-                    const Padding(
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 300),
+                    opacity: _showMeaning ? 0.0 : 1.0,
+                    child: const Padding(
                       padding: EdgeInsets.only(top: 6.0),
                       child: Text(
                         "Tap to reveal / Waiting...",
                         style: TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
                       ),
                     ),
+                  ),
                 ],
   
                 const SizedBox(height: 20),

@@ -658,5 +658,107 @@
         "example": "How are you?"
       }
     ]
+  },
+  {
+    "name": "100 A2 Words",
+    "is_game": true,
+    "words": [
+      {
+        "word": "Address",
+        "definition": "Details of where you live.",
+        "meaning_tr": "Adres",
+        "example": "What is your address?"
+      },
+      {
+        "word": "Afraid",
+        "definition": "Feeling fair.",
+        "meaning_tr": "Korkmuş",
+        "example": "Don't be afraid."
+      },
+      {
+        "word": "Age",
+        "definition": "How old someone is.",
+        "meaning_tr": "Yaş",
+        "example": "What is your age?"
+      },
+      {
+        "word": "Airplane",
+        "definition": "Vehicle that flies.",
+        "meaning_tr": "Uçak",
+        "example": "The airplane is fast."
+      },
+      {
+        "word": "Always",
+        "definition": "At all times.",
+        "meaning_tr": "Her zaman",
+        "example": "I always sleep early."
+      },
+      {
+        "word": "Angry",
+        "definition": "Not happy, mad.",
+        "meaning_tr": "Kızgın",
+        "example": "He is angry at me."
+      },
+      {
+        "word": "Animal",
+        "definition": "A living creature.",
+        "meaning_tr": "Hayvan",
+        "example": "I love animals."
+      },
+      {
+        "word": "Answer",
+        "definition": "Response to a question.",
+        "meaning_tr": "Cevap / Cevaplamak",
+        "example": "Please answer me."
+      },
+      {
+        "word": "April",
+        "definition": "The fourth month.",
+        "meaning_tr": "Nisan",
+        "example": "My birthday is in April."
+      },
+      {
+        "word": "Arm",
+        "definition": "Upper limb of body.",
+        "meaning_tr": "Kol",
+        "example": "My arm hurts."
+      },
+      {
+        "word": "Aunt",
+        "definition": "Father's or mother's sister.",
+        "meaning_tr": "Teyze / Hala",
+        "example": "My aunt is nice."
+      },
+      {
+        "word": "Bag",
+        "definition": "Container for carrying things.",
+        "meaning_tr": "Çanta",
+        "example": "I have a new bag."
+      },
+      {
+        "word": "Bathroom",
+        "definition": "Room for washing.",
+        "meaning_tr": "Banyo",
+        "example": "Where is the bathroom?"
+      },
+      {
+        "word": "Beautiful",
+        "definition": "Very pretty.",
+        "meaning_tr": "Güzel",
+        "example": "She is beautiful."
+      },
+      {
+        "word": "Because",
+        "definition": "For the reason that.",
+        "meaning_tr": "Çünkü",
+        "example": "I eat because I am hungry."
+      },
+      {
+        "word": "Become",
+        "definition": "To start to be.",
+        "meaning_tr": "Olmak (hale gelmek)",
+        "example": "I want to become a doctor."
+      }
+    ]
   }
 ]
