@@ -352,7 +352,13 @@ class _HomePageState extends State<HomePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(modeIcon, color: iconColor, size: 18)),
+                      GestureDetector(
+                        onTap: () async {
+                          await _dbService.updateCollectionMode(collection.id!, !collection.isGame);
+                          _refreshCollections();
+                        },
+                        child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(modeIcon, color: iconColor, size: 18)),
+                      ),
                       InkWell(
                         onTap: () async {
                           await _dbService.toggleFavorite(collection.id!, collection.isFavorite);
