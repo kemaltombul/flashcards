@@ -1,0 +1,42 @@
+name: english_flashcards
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  sqflite: ^2.4.2
+  path_provider: ^2.1.5
+  sqflite_common_ffi: ^2.4.0
+  file_picker: ^10.3.6
+  share_plus: ^12.0.1
+  introduction_screen: ^4.0.0
+  url_launcher: ^6.3.2
+  google_fonts: ^6.3.2
+  shared_preferences: ^2.2.2
+  path: ^1.9.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  # DÜZELTME: Bu paketler artık flutter_test'in içinde değil, hizasında.
+  flutter_launcher_icons: ^0.13.1
+  flutter_lints: ^6.0.0
+
+# KONFİGÜRASYON: En dış hizaya (root) alındı.
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/initial_data.json
