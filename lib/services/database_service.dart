@@ -194,14 +194,24 @@ class DatabaseService {
   // JSON Operations
   // =======================================================================
 /// Imports collections and words from a selected JSON file.
-Future<String> importFromJson() async {
+/// Imports collections and words from a selected JSON file.
+  Future<String> importFromJson() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
       
       if (result != null) {
         File file = File(result.files.single.path!);
         String jsonString = await file.readAsString();
-        List<dynamic> data = jsonDecode(jsonString);
+        dynamic decodedData = jsonDecode(jsonString);
+        
+        List<dynamic> data = [];
+        if (decodedData is List) {
+          data = decodedData;
+        } else if (decodedData is Map) {
+          data = [decodedData];
+        } else {
+          return "Invalid JSON format: Expected List or Object.";
+        }
 
         for (var collectionData in data) {
           // Read "is_game" from JSON (default false)
@@ -209,14 +219,16 @@ Future<String> importFromJson() async {
           
           int colId = await createCollection(collectionData['name'], isGame);
           
-          for (var wordData in collectionData['words']) {
-            await insertWord(Word(
-              collectionId: colId,
-              word: wordData['word'],
-              definition: wordData['definition'],
-              meaningTr: wordData['meaning_tr'] ?? '',
-              example: wordData['example'] ?? ''
-            ));
+          if (collectionData['words'] != null) {
+             for (var wordData in collectionData['words']) {
+              await insertWord(Word(
+                collectionId: colId,
+                word: wordData['word'],
+                definition: wordData['definition'],
+                meaningTr: wordData['meaning_tr'] ?? '',
+                example: wordData['example'] ?? ''
+              ));
+            }
           }
         }
         return "Import Successful!";
