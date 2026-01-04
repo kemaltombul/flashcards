@@ -239,6 +239,49 @@ class DatabaseService {
       return "Error: $e";
     }
   }
+  
+  /// Imports words from a list of JSON objects with deduplication.
+  /// Checks against the specific collection for existing (word + meaning_tr).
+  Future<Map<String, int>> importWordsWithDeduplication(int collectionId, List<dynamic> words) async {
+    final db = await database;
+    int insertedCount = 0;
+    int skippedCount = 0;
+
+    for (var wordData in words) {
+      String word = wordData['word'] ?? '';
+      String meaningTr = wordData['meaning_tr'] ?? '';
+      String definition = wordData['definition'] ?? '';
+      String example = wordData['example'] ?? '';
+
+      if (word.isEmpty || meaningTr.isEmpty) {
+        continue; 
+      }
+
+      // Check for duplicates in this collection
+      // We check if BOTH 'word' and 'meaning_tr' match an existing entry.
+      var result = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM words WHERE collection_id = ? AND word = ? AND meaning_tr = ?',
+        [collectionId, word, meaningTr]
+      );
+      
+      int count = Sqflite.firstIntValue(result) ?? 0;
+
+      if (count == 0) {
+        await insertWord(Word(
+          collectionId: collectionId,
+          word: word,
+          definition: definition,
+          meaningTr: meaningTr,
+          example: example,
+        ));
+        insertedCount++;
+      } else {
+        skippedCount++;
+      }
+    }
+
+    return {'inserted': insertedCount, 'skipped': skippedCount};
+  }
 
   /// Exports a collection and its words to a JSON file.
   Future<String> exportCollectionAsJson(int collectionId, String collectionName) async {

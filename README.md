@@ -11,6 +11,8 @@
 ### 🗂️ **Smart Collections**
 -   **Organize**: Create custom word sets (e.g., "B2 Business", "Travel Essentials").
 -   **Import/Export**: Share your lists easily via JSON.
+-   **Bulk Import**: Speed up your workflow by pasting JSON lists directly into the app.
+-   **Smart Deduplication**: Automatically detects and skips duplicates during import to keep your collections clean.
 -   **Quick Toggle**: Switch between **Game Mode** 🎮 and **Study Mode** 📖 instantly with a single tap on the home screen.
 -   **Visual Cues**: Collections are color-coded (Orange for Game, Blue for Study) for instant recognition.
 
