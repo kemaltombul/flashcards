@@ -180,6 +180,40 @@ class DatabaseService {
     await db.delete('words', where: 'id = ?', whereArgs: [id]);
   }
 
+
+  
+  /// Checks if a word exists in the database regardless of collection.
+  /// Returns true if found, false otherwise.
+  Future<bool> wordExists(String word) async {
+    final db = await database;
+    var result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM words WHERE LOWER(word) = ?',
+      [word.toLowerCase()]
+    );
+    int count = Sqflite.firstIntValue(result) ?? 0;
+    return count > 0;
+  }
+
+  /// Checks if a word with a specific meaning exists.
+  /// Useful for words with multiple meanings (polysemy).
+  Future<bool> wordAndMeaningExists(String word, String meaningTr) async {
+    final db = await database;
+    // We check if the existing meaning contains the new meaning or vice versa to catch partial matches.
+    // e.g. "Kuş" vs "Kuş türü"
+    var result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM words WHERE LOWER(word) = ? AND LOWER(meaning_tr) LIKE ?',
+      [word.toLowerCase(), '%${meaningTr.toLowerCase()}%']
+    );
+    int count = Sqflite.firstIntValue(result) ?? 0;
+    return count > 0;
+  }
+
+  /// Inserts a word from a map object.
+  Future<int> insertWordMap(Map<String, dynamic> wordMap) async {
+    final db = await database;
+    return await db.insert('words', wordMap);
+  }
+
   Future<void> updateWord(Word word) async {
     final db = await database;
     await db.update(

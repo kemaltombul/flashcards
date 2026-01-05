@@ -1,9 +1,8 @@
 name: english_flashcards
-description: "A new Flutter project."
+description: "English Flashcards"
 publish_to: 'none'
 
-version: 1.0.0+1
-
+version: 1.1.0-beta.1+2
 environment:
   sdk: ^3.10.0
 
@@ -21,14 +20,15 @@ dependencies:
   google_fonts: ^6.3.2
   shared_preferences: ^2.2.2
   path: ^1.9.1
+  http: ^1.6.0
+  dart_openai: ^5.0.0
+  flutter_dotenv: ^6.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  # DÜZELTME: Bu paketler artık flutter_test'in içinde değil, hizasında.
   flutter_launcher_icons: ^0.13.1
   flutter_lints: ^6.0.0
 
-# KONFİGÜRASYON: En dış hizaya (root) alındı.
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
@@ -40,3 +40,4 @@ flutter:
   assets:
     - assets/images/
     - assets/initial_data.json
+    - .env

@@ -64,3 +64,6 @@ macos/Flutter/ephemeral/
 
 # Exceptions to above rules
 !.gitignore
+
+# Environment Variables
+.env

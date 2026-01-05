@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/services.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import 'screens/home_page.dart';
 void main() async {
   // Initialize Flutter engine
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
 
   // Database setup for Desktop/Web
   if (defaultTargetPlatform == TargetPlatform.linux ||
