@@ -39,4 +39,23 @@ class Word {
       example: map['example'] ?? '',
     );
   }
+
+  /// Creates a copy of this Word but with the given fields replaced with the new values.
+  Word copyWith({
+    int? id,
+    int? collectionId,
+    String? word,
+    String? definition,
+    String? meaningTr,
+    String? example,
+  }) {
+    return Word(
+      id: id ?? this.id,
+      collectionId: collectionId ?? this.collectionId,
+      word: word ?? this.word,
+      definition: definition ?? this.definition,
+      meaningTr: meaningTr ?? this.meaningTr,
+      example: example ?? this.example,
+    );
+  }
 }

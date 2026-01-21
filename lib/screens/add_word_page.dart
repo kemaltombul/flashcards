@@ -8,12 +8,13 @@ import '../models/word.dart';
 import '../models/collection.dart';
 import '../services/ai_service.dart';
 
+
 enum AddMode { manual, smart, json }
 
 /// Page for adding a new word to a specific collection.
 class AddWordPage extends StatefulWidget {
-  final int collectionId;
-  const AddWordPage({super.key, required this.collectionId});
+  final int? collectionId;
+  const AddWordPage({super.key, this.collectionId});
 
   @override
   State<AddWordPage> createState() => _AddWordPageState();
@@ -23,7 +24,7 @@ class _AddWordPageState extends State<AddWordPage> {
   AddMode _currentMode = AddMode.smart;
   bool _isLoading = false;
   List<Collection> _collections = [];
-  late int _selectedCollectionId;
+  int? _selectedCollectionId;
   
   // Auto-Save Logic
   Timer? _autoSaveTimer;
@@ -50,7 +51,9 @@ class _AddWordPageState extends State<AddWordPage> {
   @override
   void initState() {
     super.initState();
-    _selectedCollectionId = widget.collectionId;
+    if (widget.collectionId != null) {
+      _selectedCollectionId = widget.collectionId!;
+    }
     _loadCollections();
   }
 
@@ -58,6 +61,11 @@ class _AddWordPageState extends State<AddWordPage> {
     final cols = await _dbService.getCollections();
     setState(() {
       _collections = cols;
+      if (_collections.isNotEmpty) {
+        // If no ID passed, or passed ID not in list, default to first
+        bool idExists = widget.collectionId != null && _collections.any((c) => c.id == widget.collectionId);
+        _selectedCollectionId = idExists ? widget.collectionId! : _collections.first.id!;
+      }
     });
   }
 
@@ -81,22 +89,30 @@ class _AddWordPageState extends State<AddWordPage> {
     bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
     Widget content = Scaffold(
-      appBar: AppBar(
-        title: const Text("Add Word"),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(25.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Custom Header
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20.0),
+              child: Row(
+                children: [
+                  if (widget.collectionId != null) ...[
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new, size: 22, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 15),
+                  ],
+                  const Text("Add Word", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
+                ],
+              ),
+            ),
             const Text(
               "Learn a new word!",
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.deepPurple),
@@ -116,32 +132,11 @@ class _AddWordPageState extends State<AddWordPage> {
           ],
         ),
       ),
+    ),
     );
 
     // Constrain layout for Web/Desktop
-    if (isMobile) {
-      return content;
-    } else {
-      return Scaffold(
-        backgroundColor: Colors.black87,
-        body: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 450, maxHeight: 800),
-            margin: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E), // Dark card color
-              borderRadius: BorderRadius.circular(40),
-              border: Border.all(color: Colors.grey.shade800, width: 2),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20)],
-            ),
-            child: ClipRRect(
-              borderRadius: const BorderRadius.all(Radius.circular(34)),
-              child: content,
-            ),
-          ),
-        ),
-      );
-    }
+    return content;
   }
 
   // --- Widgets ---
@@ -630,18 +625,22 @@ class _AddWordPageState extends State<AddWordPage> {
 
   Widget _buildCollectionSelector() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), // adjusted vertical to account for internal button height
       decoration: BoxDecoration(
-        color: const Color(0xFF2C2C2C),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white10),
+        color: Colors.black12,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
+        child: _collections.isEmpty 
+          ? const Center(child: Text("No collections. Please create one.", style: TextStyle(color: Colors.redAccent)))
+          : DropdownButton<int>(
           value: _selectedCollectionId,
+          hint: const Text("Select Collection", style: TextStyle(color: Colors.white54)),
           isExpanded: true,
-          dropdownColor: const Color(0xFF383838),
-          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.deepPurpleAccent),
+          dropdownColor: const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(12),
+          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
           style: const TextStyle(color: Colors.white, fontSize: 16),
           items: _collections.map((col) {
             return DropdownMenuItem<int>(
@@ -672,18 +671,30 @@ class _AddWordPageState extends State<AddWordPage> {
   // --- Mode Actions ---
 
   Future<void> _saveWord() async {
-    if (_formKey.currentState!.validate()) {
-      await _dbService.insertWord(Word(
-        collectionId: _selectedCollectionId,
-        word: _wordController.text,
-        definition: _defController.text,
-        meaningTr: _trController.text,
-        example: _exController.text,
-      ));
+    if (_selectedCollectionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a collection!"), backgroundColor: Colors.orange));
+      return;
+    }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Successfully Added!"), backgroundColor: Colors.green));
-        _clearFields();
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true); // Visualize loading
+      try {
+        await _dbService.insertWord(Word(
+          collectionId: _selectedCollectionId!,
+          word: _wordController.text.trim(),
+          definition: _defController.text.trim(),
+          meaningTr: _trController.text.trim(),
+          example: _exController.text.trim().isEmpty ? "" : _exController.text.trim(),
+        ));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Successfully Added!"), backgroundColor: Colors.green));
+          _clearFields();
+        }
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
     }
   }
@@ -694,6 +705,11 @@ class _AddWordPageState extends State<AddWordPage> {
        return;
     }
 
+    if (_selectedCollectionId == null) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a collection!"), backgroundColor: Colors.orange));
+       return;
+    }
+
     setState(() => _isLoading = true);
     FocusScope.of(context).unfocus(); 
 
@@ -701,7 +717,7 @@ class _AddWordPageState extends State<AddWordPage> {
       final Map<String, dynamic> aiData = await _aiService.generateSmartWord(
         _wordController.text, 
         _defController.text.isNotEmpty ? _defController.text : null,
-        _selectedCollectionId
+        _selectedCollectionId!
       );
 
       if (mounted) {
@@ -746,6 +762,11 @@ class _AddWordPageState extends State<AddWordPage> {
   Future<void> _importJson() async {
     String jsonString = _jsonController.text.trim();
     if (jsonString.isEmpty) return;
+    
+    if (_selectedCollectionId == null) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a collection!"), backgroundColor: Colors.orange));
+       return;
+    }
 
     try {
       if (!jsonString.startsWith('[') && !jsonString.endsWith(']')) {
@@ -757,7 +778,7 @@ class _AddWordPageState extends State<AddWordPage> {
 
       List<dynamic> data = jsonDecode(jsonString);
       
-      var stats = await _dbService.importWordsWithDeduplication(_selectedCollectionId, data);
+      var stats = await _dbService.importWordsWithDeduplication(_selectedCollectionId!, data);
       
       int imported = stats['inserted'] ?? 0;
       int skipped = stats['skipped'] ?? 0;

@@ -1,22 +1,22 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
+
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/database_service.dart';
 import '../models/collection.dart';
-import 'card_page.dart';
-import 'add_word_page.dart';
-import 'collection_settings_page.dart';
+import 'flashcard_page.dart';
+
+
 
 /// The main screen displaying all collections.
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class CollectionsPage extends StatefulWidget {
+  const CollectionsPage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<CollectionsPage> createState() => _CollectionsPageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _CollectionsPageState extends State<CollectionsPage> {
   final DatabaseService _dbService = DatabaseService();
   
   List<Collection> _collections = [];
@@ -164,6 +164,52 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Displays a dialog to rename a collection.
+  void _showRenameDialog(Collection collection) {
+    final TextEditingController controller = TextEditingController(text: collection.name);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: _cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text("Rename Collection", style: _textStyle.copyWith(color: _accentColor, fontSize: 20, fontWeight: FontWeight.bold)),
+          content: TextField(
+            controller: controller,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: "Enter new name",
+              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+              filled: true,
+              fillColor: Colors.black12,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), 
+              child: Text("Cancel", style: _textStyle.copyWith(color: Colors.grey.shade400))
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _accentColor, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: () async {
+                if (controller.text.isNotEmpty && controller.text != collection.name) {
+                  await _dbService.updateCollectionName(collection.id!, controller.text);
+                  if (context.mounted) {
+                    _refreshCollections();
+                    Navigator.pop(context);
+                  }
+                }
+              },
+              child: const Text("Save", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   /// Handles importing a collection from a JSON file.
   void _importJson() async {
     String result = await _dbService.importFromJson();
@@ -176,7 +222,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     // Check if Mobile or Web
-    bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
     Widget content = Scaffold(
       backgroundColor: _backgroundColor,
       body: SafeArea(
@@ -280,23 +326,7 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
-    if (isMobile) {
-      return content;
-    } else {
-      return Scaffold(
-        backgroundColor: Colors.black, 
-        body: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 450, maxHeight: 800), 
-            margin: const EdgeInsets.all(20), 
-            child: ClipRRect(
-              borderRadius: const BorderRadius.all(Radius.circular(34)), 
-              child: content
-            )
-          )
-        )
-      );
-    }
+    return content;
   }
 
   /// Builds a single collection card with gestures.
@@ -312,7 +342,7 @@ class _HomePageState extends State<HomePage> {
         if (count > 0) {
            if (mounted) {
              await Navigator.of(context).push(_createFluidRoute(
-               VocabularyCardPage(
+               FlashcardPage(
                  collectionId: collection.id!, 
                  collectionName: collection.name,
                  isGame: collection.isGame,
@@ -385,20 +415,13 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: _cardColor,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (sheetContext) => Wrap(children: [
+
         ListTile(
-          leading: const Icon(Icons.add_circle, color: Colors.greenAccent), 
-          title: Text("Add New Word", style: _textStyle), 
-          onTap: () {Navigator.pop(sheetContext); Navigator.of(context).push(_createFluidRoute(AddWordPage(collectionId: collection.id!)));}
-        ),
-        ListTile(
-          leading: const Icon(Icons.settings, color: Colors.white70), 
-          title: Text("Settings / Edit", style: _textStyle), 
-          onTap: () async {
-            Navigator.pop(sheetContext); 
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => CollectionSettingsPage(collection: collection))
-            );
-            if (context.mounted) _refreshCollections(); 
+          leading: const Icon(Icons.edit, color: Colors.white70), 
+          title: Text("Rename Collection", style: _textStyle), 
+          onTap: () {
+            Navigator.pop(sheetContext);
+            _showRenameDialog(collection);
           }
         ),
         ListTile(

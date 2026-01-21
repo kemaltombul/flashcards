@@ -67,19 +67,19 @@ class DatabaseService {
     );
   }
 
-  /// Loads initial vocabulary data from a JSON file in assets.
-  Future<void> _loadInitialDataFromName(Database db, String fileName) async {
-    try {
-      String jsonString = await rootBundle.loadString('assets/$fileName');
-      List<dynamic> data = jsonDecode(jsonString);
+  /// Helper to import collections and words from a list of data.
+  /// Used by both initial load and JSON import.
+  Future<void> _importCollectionsFromData(List<dynamic> data, {DatabaseExecutor? executor}) async {
+    final db = executor ?? await database;
 
-      for (var collectionData in data) {
-        int colId = await db.insert('collections', {
-          'name': collectionData['name'],
-          'is_favorite': 0,
-          'is_game': 0 // Game mode off by default
-        });
+    for (var collectionData in data) {
+      int colId = await db.insert('collections', {
+        'name': collectionData['name'],
+        'is_favorite': 0,
+        'is_game': (collectionData['is_game'] ?? false) == true ? 1 : 0
+      });
 
+      if (collectionData['words'] != null) {
         for (var wordData in collectionData['words']) {
           await db.insert('words', {
             'collection_id': colId,
@@ -90,6 +90,15 @@ class DatabaseService {
           });
         }
       }
+    }
+  }
+
+  /// Loads initial vocabulary data from a JSON file in assets.
+  Future<void> _loadInitialDataFromName(Database db, String fileName) async {
+    try {
+      String jsonString = await rootBundle.loadString('assets/$fileName');
+      List<dynamic> data = jsonDecode(jsonString);
+      await _importCollectionsFromData(data, executor: db);
     } catch (e) {
       debugPrint("JSON Load Error: $e");
     }
@@ -116,10 +125,20 @@ class DatabaseService {
     return List.generate(maps.length, (i) => Collection.fromMap(maps[i]));
   }
 
+  /// Helper to update a collection's properties.
+  Future<void> _updateCollection(int id, Map<String, Object?> values) async {
+    final db = await database;
+    await db.update(
+      'collections',
+      values,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   /// Toggles the favorite status of a collection.
   Future<void> toggleFavorite(int id, bool currentStatus) async {
-    final db = await database;
-    await db.update('collections', {'is_favorite': currentStatus ? 0 : 1}, where: 'id = ?', whereArgs: [id]);
+    await _updateCollection(id, {'is_favorite': currentStatus ? 0 : 1});
   }
 
   /// Deletes a collection and its associated words (cascade delete).
@@ -131,24 +150,12 @@ class DatabaseService {
   // Settings Update Method
   /// Updates the game mode status of a collection.
   Future<void> updateCollectionMode(int id, bool isGame) async {
-    final db = await database;
-    await db.update(
-      'collections',
-      {'is_game': isGame ? 1 : 0},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _updateCollection(id, {'is_game': isGame ? 1 : 0});
   }
 
   /// Updates the name of a collection.
   Future<void> updateCollectionName(int id, String newName) async {
-    final db = await database;
-    await db.update(
-      'collections',
-      {'name': newName},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _updateCollection(id, {'name': newName});
   }
 
   // =======================================================================
@@ -182,6 +189,40 @@ class DatabaseService {
 
 
   
+  /// Searches for words matching the query string.
+  /// Searches for words matching the query string.
+  /// If [collectionIds] is provided, filters by those collections.
+  /// If [query] is empty, returns all words (filtered by collection if provided).
+  Future<List<Word>> searchWords(String query, {List<int>? collectionIds}) async {
+    final db = await database;
+    
+    String whereClause = '';
+    List<dynamic> args = [];
+
+    // Filter by Collections
+    if (collectionIds != null && collectionIds.isNotEmpty) {
+      String placeHolders = List.filled(collectionIds.length, '?').join(',');
+      whereClause = 'collection_id IN ($placeHolders)';
+      args.addAll(collectionIds);
+    }
+
+    // Filter by Query
+    if (query.trim().isNotEmpty) {
+      if (whereClause.isNotEmpty) whereClause += ' AND ';
+      // Wrap ORs in parenthesis when combined with AND
+      whereClause += '(word LIKE ? OR definition LIKE ? OR meaning_tr LIKE ?)';
+      args.addAll(['%$query%', '%$query%', '%$query%']);
+    }
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'words',
+      where: whereClause.isEmpty ? null : whereClause,
+      whereArgs: args.isNotEmpty ? args : null,
+      orderBy: 'word ASC', // Optional: Sort alphabetically
+    );
+    return List.generate(maps.length, (i) => Word.fromMap(maps[i]));
+  }
+
   /// Checks if a word exists in the database regardless of collection.
   /// Returns true if found, false otherwise.
   Future<bool> wordExists(String word) async {
@@ -247,24 +288,8 @@ class DatabaseService {
           return "Invalid JSON format: Expected List or Object.";
         }
 
-        for (var collectionData in data) {
-          // Read "is_game" from JSON (default false)
-          bool isGame = collectionData['is_game'] ?? false;
-          
-          int colId = await createCollection(collectionData['name'], isGame);
-          
-          if (collectionData['words'] != null) {
-             for (var wordData in collectionData['words']) {
-              await insertWord(Word(
-                collectionId: colId,
-                word: wordData['word'],
-                definition: wordData['definition'],
-                meaningTr: wordData['meaning_tr'] ?? '',
-                example: wordData['example'] ?? ''
-              ));
-            }
-          }
-        }
+        await _importCollectionsFromData(data);
+        
         return "Import Successful!";
       } else {
         return "No file selected.";
@@ -291,7 +316,7 @@ class DatabaseService {
         continue; 
       }
 
-      // Check for duplicates in this collection
+      // Check for duplicates in THIS collection
       // We check if BOTH 'word' and 'meaning_tr' match an existing entry.
       var result = await db.rawQuery(
         'SELECT COUNT(*) as count FROM words WHERE collection_id = ? AND word = ? AND meaning_tr = ?',

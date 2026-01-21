@@ -9,12 +9,13 @@ import '../services/database_service.dart';
 import '../models/word.dart';
 
 /// Displays flashcards for a collection, supporting both study and game modes.
-class VocabularyCardPage extends StatefulWidget {
+/// Displays flashcards for a collection, supporting both study and game modes.
+class FlashcardPage extends StatefulWidget {
   final int collectionId;
   final String collectionName;
   final bool isGame;
 
-  const VocabularyCardPage({
+  const FlashcardPage({
     super.key,
     required this.collectionId,
     required this.collectionName,
@@ -22,10 +23,10 @@ class VocabularyCardPage extends StatefulWidget {
   });
 
   @override
-  State<VocabularyCardPage> createState() => _VocabularyCardPageState();
+  State<FlashcardPage> createState() => _FlashcardPageState();
 }
 
-class _VocabularyCardPageState extends State<VocabularyCardPage> {
+class _FlashcardPageState extends State<FlashcardPage> {
   // Background Images
   final List<String> _backgroundImages = [
     'assets/images/bg1.jpg',
