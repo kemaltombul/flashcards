@@ -6,7 +6,9 @@ import 'dart:async';
 import 'dart:math';
 
 import '../services/database_service.dart';
+import '../services/scoring_service.dart';
 import '../models/word.dart';
+import '../models/telemetry_data.dart';
 
 /// Displays flashcards for a collection, supporting both study and game modes.
 /// Displays flashcards for a collection, supporting both study and game modes.
@@ -54,9 +56,20 @@ class _FlashcardPageState extends State<FlashcardPage> {
   Timer? _timer;
   bool _showMeaning = false;
 
+  // Telemetry Tracking
+  final ScoringService _scoringService = ScoringService();
+  late DateTime _cardShownTime;
+  DateTime? _popupOpenTime;
+  int _popupDurationMs = 0;
+  bool _popupOpened = false;
+  int _sessionStep = 0; // Incremented per card view
+  late int _sessionId; // Random session ID to group logs
+
   @override
   void initState() {
     super.initState();
+    _sessionId = DateTime.now().millisecondsSinceEpoch; // Unique session ID
+    _cardShownTime = DateTime.now(); // Start tracking first card
     
     if (_backgroundImages.isNotEmpty) {
       _currentBackground = _backgroundImages[Random().nextInt(_backgroundImages.length)];
@@ -133,8 +146,97 @@ class _FlashcardPageState extends State<FlashcardPage> {
     });
   }
 
+  /// Logs telemetry data for the current card before switching.
+  Future<void> _logCardData(String actionType) async {
+    if (_words.isEmpty) return;
+
+    final word = _words[_currentIndex];
+    final now = DateTime.now();
+    final durationMs = now.difference(_cardShownTime).inMilliseconds;
+
+    // Calculate popup duration if it was opened
+    if (_popupOpened && _popupOpenTime != null) {
+      _popupDurationMs = now.difference(_popupOpenTime!).inMilliseconds;
+    }
+
+    // Calculate score
+    final score = _scoringService.calculateLearningScore(
+      durationMs / 1000.0, 
+      _popupOpened
+    );
+
+    // Context metrics
+    final hoursSinceView = word.lastReviewedAt != null 
+        ? DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(word.lastReviewedAt!)).inHours 
+        : null;
+
+    int? userRating;
+    
+    // ~15% chance to ask for user rating (ground truth)
+    // Only if action is 'next' (meaning they likely 'answered' it) and not just browsing back
+    if (actionType == 'next' && Random().nextDouble() < 0.15) {
+       userRating = await _showRatingDialog();
+    }
+
+    final log = TelemetryData(
+      wordId: word.id!,
+      sessionId: _sessionId,
+      timestamp: now.millisecondsSinceEpoch,
+      durationMs: durationMs,
+      popupOpened: _popupOpened,
+      popupDurationMs: _popupDurationMs,
+      actionType: actionType,
+      wordLength: word.word.length,
+      sessionStepIndex: ++_sessionStep,
+      totalViewCount: word.viewCount, // Make sure Word model has this field or add it
+      hoursSinceLastView: hoursSinceView,
+      currentAlgoScore: score,
+      userRating: userRating,
+    );
+
+    // Fire and forget logging (don't block UI)
+    _dbService.logTelemetry(log);
+    _dbService.updateWordStats(word.id!);
+
+    // Reset metrics for next card
+    _cardShownTime = DateTime.now();
+    _popupOpened = false;
+    _popupDurationMs = 0;
+  }
+
+  /// Shows a quick rating dialog for ground truth collection.
+  Future<int?> _showRatingDialog() async {
+    return showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text("How well do you know this?", style: TextStyle(color: Colors.white, fontSize: 18)),
+        content: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(6, (index) {
+            int rating = index + 1;
+            return GestureDetector(
+              onTap: () => Navigator.pop(context, rating),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurpleAccent.withValues(alpha: 0.2 + (index * 0.1)), // Darker for higher ratings
+                  shape: BoxShape.circle,
+                ),
+                child: Text("$rating", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
   /// Advances to the next card in the list.
-  void _nextCard() {
+  void _nextCard() async {
+    await _logCardData('next');
+    
     setState(() {
       _showMeaning = false;
       
@@ -151,7 +253,9 @@ class _FlashcardPageState extends State<FlashcardPage> {
   }
 
   /// Returns to the previous card.
-  void _prevCard() {
+  void _prevCard() async {
+    await _logCardData('prev');
+
     if (_currentIndex > 0) {
       setState(() {
         _showMeaning = false;
@@ -335,9 +439,19 @@ class _FlashcardPageState extends State<FlashcardPage> {
       onTap: () {
         if (!widget.isGame && !_showMeaning) {
           _timer?.cancel();
+          // Telemetry: Track popup open
+          _popupOpened = true;
+          _popupOpenTime = DateTime.now();
+          
           setState(() {
             _showMeaning = true;
           });
+          
+          // Since meaning is now shown until card change, we can approximate duration 
+          // as "until next card" (calculated in _logCardData) or we can just say 
+          // looking at definition counts as usage time. 
+          // For now, let's assume they look at it until they leave the card.
+          _popupDurationMs = 0; // Will be calculated on exit
         }
       },
       child: ClipRRect(

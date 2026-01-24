@@ -47,7 +47,7 @@ class _MainPageState extends State<MainPage> {
       body: PageView(
         controller: _pageController,
         onPageChanged: _onPageChanged,
-        physics: const BouncingScrollPhysics(),
+        physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
         children: const [
           SearchPage(),
           AddWordPage(),

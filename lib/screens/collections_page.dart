@@ -219,6 +219,20 @@ class _CollectionsPageState extends State<CollectionsPage> {
     _refreshCollections();
   }
 
+  /// Exports telemetry logs to a JSON file.
+  void _exportTelemetry() async {
+    String result = await _dbService.exportTelemetryData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result, style: const TextStyle(color: Colors.black)), 
+          backgroundColor: _accentColor,
+          behavior: SnackBarBehavior.floating
+        )
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Check if Mobile or Web
@@ -228,17 +242,42 @@ class _CollectionsPageState extends State<CollectionsPage> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("My Library", style: _textStyle.copyWith(fontSize: 32, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 5),
-                    Text("Manage your collections", style: _textStyle.copyWith(fontSize: 14, color: Colors.white54)),
+            SliverAppBar(
+              backgroundColor: _backgroundColor,
+              floating: true,
+              expandedHeight: 80,
+              flexibleSpace: FlexibleSpaceBar(
+                titlePadding: const EdgeInsets.only(left: 24, bottom: 12),
+                title: Text("My Library", style: _textStyle.copyWith(fontSize: 24, fontWeight: FontWeight.bold)),
+              ),
+              actions: [
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white70),
+                  onSelected: (value) {
+                    if (value == 'export_telemetry') {
+                      _exportTelemetry();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'export_telemetry',
+                      child: Row(
+                        children: [
+                          Icon(Icons.analytics_outlined, color: Colors.blueGrey),
+                          SizedBox(width: 8),
+                          Text("Export Telemetry"),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
+                const SizedBox(width: 10),
+              ],
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                child: Text("Manage your collections", style: _textStyle.copyWith(fontSize: 14, color: Colors.white54)),
               ),
             ),
             _collections.isEmpty

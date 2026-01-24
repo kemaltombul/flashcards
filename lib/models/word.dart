@@ -6,6 +6,8 @@ class Word {
   final String definition;
   final String meaningTr;
   final String example;
+  final int viewCount;
+  final int? lastReviewedAt; // Milliseconds timestamp
 
   Word({
     this.id,
@@ -14,6 +16,8 @@ class Word {
     required this.definition,
     required this.meaningTr,
     required this.example,
+    this.viewCount = 0,
+    this.lastReviewedAt,
   });
 
   /// Converts the Word object to a Map for database storage.
@@ -25,6 +29,8 @@ class Word {
       'definition': definition,
       'meaning_tr': meaningTr,
       'example': example,
+      'view_count': viewCount,
+      'last_reviewed_at': lastReviewedAt,
     };
   }
 
@@ -37,6 +43,8 @@ class Word {
       definition: map['definition'],
       meaningTr: map['meaning_tr'] ?? '',
       example: map['example'] ?? '',
+      viewCount: map['view_count'] ?? 0,
+      lastReviewedAt: map['last_reviewed_at'],
     );
   }
 
@@ -48,6 +56,8 @@ class Word {
     String? definition,
     String? meaningTr,
     String? example,
+    int? viewCount,
+    int? lastReviewedAt,
   }) {
     return Word(
       id: id ?? this.id,
@@ -56,6 +66,8 @@ class Word {
       definition: definition ?? this.definition,
       meaningTr: meaningTr ?? this.meaningTr,
       example: example ?? this.example,
+      viewCount: viewCount ?? this.viewCount,
+      lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
     );
   }
 }

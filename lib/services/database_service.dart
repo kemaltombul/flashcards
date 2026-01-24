@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/word.dart';
 import '../models/collection.dart';
+import '../models/telemetry_data.dart';
 
 /// Service class to handle all SQLite database operations.
 /// Implements Singleton pattern to ensure only one instance exists.
@@ -33,9 +34,43 @@ class DatabaseService {
     
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Incremented version for schema update
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add new columns to 'words' table
+          try {
+            await db.execute('ALTER TABLE words ADD COLUMN view_count INTEGER DEFAULT 0');
+            await db.execute('ALTER TABLE words ADD COLUMN last_reviewed_at INTEGER');
+          } catch (e) {
+            // Check if column already exists (sqlite doesn't support IF NOT EXISTS for columns easily)
+            debugPrint("Migration error (ignorable if columns exist): $e");
+          }
+
+          // Create 'telemetry_logs' table
+          await db.execute('''
+            CREATE TABLE telemetry_logs(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              word_id INTEGER,
+              session_id INTEGER,
+              timestamp INTEGER,
+              duration_ms INTEGER,
+              popup_opened INTEGER,
+              popup_duration_ms INTEGER,
+              action_type TEXT,
+              word_length INTEGER,
+              session_step_index INTEGER,
+              total_view_count INTEGER,
+              hours_since_last_view INTEGER,
+              current_algo_score REAL,
+              user_rating INTEGER,
+              actual_mastery INTEGER,
+              FOREIGN KEY(word_id) REFERENCES words(id) ON DELETE CASCADE
+            )
+          ''');
+        }
       },
       onCreate: (db, version) async {
         // 1. Collections Table
@@ -48,7 +83,7 @@ class DatabaseService {
           )
         ''');
 
-        // 2. Words Table
+        // 2. Words Table (Updated Schema for fresh install)
         await db.execute('''
           CREATE TABLE words(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,9 +92,33 @@ class DatabaseService {
             definition TEXT,
             meaning_tr TEXT, 
             example TEXT,
+            view_count INTEGER DEFAULT 0,
+            last_reviewed_at INTEGER,
             FOREIGN KEY(collection_id) REFERENCES collections(id) ON DELETE CASCADE
           )
         ''');
+
+        // 3. Telemetry Table
+        await db.execute('''
+            CREATE TABLE telemetry_logs(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              word_id INTEGER,
+              session_id INTEGER,
+              timestamp INTEGER,
+              duration_ms INTEGER,
+              popup_opened INTEGER,
+              popup_duration_ms INTEGER,
+              action_type TEXT,
+              word_length INTEGER,
+              session_step_index INTEGER,
+              total_view_count INTEGER,
+              hours_since_last_view INTEGER,
+              current_algo_score REAL,
+              user_rating INTEGER,
+              actual_mastery INTEGER,
+              FOREIGN KEY(word_id) REFERENCES words(id) ON DELETE CASCADE
+            )
+          ''');
 
         // Load initial data
         await _loadInitialDataFromName(db, 'initial_data.json');
@@ -335,11 +394,31 @@ class DatabaseService {
         ));
         insertedCount++;
       } else {
-        skippedCount++;
       }
     }
 
     return {'inserted': insertedCount, 'skipped': skippedCount};
+  }
+
+  // =======================================================================
+  // Telemetry & Stats
+  // =======================================================================
+
+  /// Logs a telemetry event to the database.
+  Future<void> logTelemetry(TelemetryData data) async {
+    final db = await database;
+    await db.insert('telemetry_logs', data.toMap());
+  }
+
+  /// Updates usage stats for a word (view count and last reviewed time).
+  Future<void> updateWordStats(int wordId) async {
+    final db = await database;
+    await db.rawUpdate('''
+      UPDATE words 
+      SET view_count = view_count + 1, 
+      last_reviewed_at = ? 
+      WHERE id = ?
+      ''', [DateTime.now().millisecondsSinceEpoch, wordId]);
   }
 
   /// Exports a collection and its words to a JSON file.
@@ -384,6 +463,48 @@ class DatabaseService {
       }
     } catch (e) {
       return "Error: $e";
+    }
+  }
+  /// Retrieves all telemetry logs.
+  Future<List<Map<String, dynamic>>> getAllTelemetryLogs() async {
+    final db = await database;
+    return await db.query('telemetry_logs');
+  }
+
+  /// Exports all telemetry logs to a JSON file.
+  Future<String> exportTelemetryData() async {
+    try {
+      final logs = await getAllTelemetryLogs();
+      if (logs.isEmpty) return "No telemetry logs found.";
+
+      String jsonString = const JsonEncoder.withIndent('  ').convert(logs);
+      String fileName = 'telemetry_logs_${DateTime.now().millisecondsSinceEpoch}.json';
+
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        final directory = await getTemporaryDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsString(jsonString);
+        // ignore: deprecated_member_use
+        await Share.shareXFiles([XFile(file.path)], text: 'Telemetry Logs');
+        return "Share screen opened.";
+      } else {
+        String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Save Telemetry Logs',
+          fileName: fileName,
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+        );
+
+        if (outputFile != null) {
+          File file = File(outputFile);
+          await file.writeAsString(jsonString);
+          return "File saved:\n$outputFile";
+        } else {
+          return "Save canceled.";
+        }
+      }
+    } catch (e) {
+      return "Error exporting logs: $e";
     }
   }
 }
