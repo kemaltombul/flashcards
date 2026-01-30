@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/services.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:english_flashcards/firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:english_flashcards/services/auth_service.dart';
 import 'screens/main_page.dart';
+import 'screens/login_page.dart';
 
 void main() async {
   // Initialize Flutter engine
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
 
-  // Database setup for Desktop/Web
-  if (defaultTargetPlatform == TargetPlatform.linux ||
-      defaultTargetPlatform == TargetPlatform.windows ||
-      defaultTargetPlatform == TargetPlatform.macOS ||
-      kIsWeb) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  // Enable OFFLINE persistence
+  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
 
   // Lock screen orientation to portrait
   SystemChrome.setPreferredOrientations([
@@ -33,7 +34,7 @@ class VocabularyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'English Flashcards',
+      title: 'Flash Cards',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         // Theme colors
@@ -45,7 +46,21 @@ class VocabularyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const MainPage(), 
+      // Auth Gate
+      home: StreamBuilder(
+        stream: AuthService().authStateChanges,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasData) {
+            return const MainPage();
+          }
+          return const LoginPage();
+        },
+      ),
     );
   }
 }

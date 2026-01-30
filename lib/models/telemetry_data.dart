@@ -1,14 +1,14 @@
 class TelemetryData {
-  final int? id;
-  final int wordId;
-  final int sessionId;
+  final String? id;
+  final String wordId;
+  final String sessionId;
   final int timestamp;
   
   // Interaction Metrics
   final int durationMs;
   final bool popupOpened;
   final int popupDurationMs;
-  final String actionType; // 'next', 'prev', 'restart', 'close'
+  // final String actionType; // Removed
 
   // Context Metrics
   final int wordLength;
@@ -29,7 +29,7 @@ class TelemetryData {
     required this.durationMs,
     required this.popupOpened,
     required this.popupDurationMs,
-    required this.actionType,
+    // required this.actionType, // Removed
     required this.wordLength,
     required this.sessionStepIndex,
     required this.totalViewCount,
@@ -47,7 +47,7 @@ class TelemetryData {
       'duration_ms': durationMs,
       'popup_opened': popupOpened ? 1 : 0,
       'popup_duration_ms': popupDurationMs,
-      'action_type': actionType,
+      // 'action_type': actionType, // Removed
       'word_length': wordLength,
       'session_step_index': sessionStepIndex,
       'total_view_count': totalViewCount,

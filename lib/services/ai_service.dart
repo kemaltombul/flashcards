@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:dart_openai/dart_openai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'database_service.dart';
+import 'firestore_service.dart';
 
 class AIService {
-  final DatabaseService _dbService = DatabaseService();
+  final FirestoreService _dbService = FirestoreService();
 
   // OpenAI API Configuration
   final String _apiKey = dotenv.env['OPENAI_API_KEY'] ?? ""; 
@@ -18,7 +18,7 @@ class AIService {
 
   /// Generates a word with details using AI but DOES NOT save it.
   /// Returns the word data as a Map.
-  Future<Map<String, dynamic>> generateSmartWord(String inputWord, String? userDefinition, int collectionId) async {
+  Future<Map<String, dynamic>> generateSmartWord(String inputWord, String? userDefinition, String collectionId) async {
     try {
       // 1. Input Validation
       if (inputWord.trim().isEmpty) {

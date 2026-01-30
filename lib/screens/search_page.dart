@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 import '../models/word.dart';
 import '../models/collection.dart';
 import '../widgets/multi_select_dropdown.dart';
@@ -12,12 +12,12 @@ class SearchPage extends StatefulWidget {
   State<SearchPage> createState() => _SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> {
-  final DatabaseService _dbService = DatabaseService();
+class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMixin {
+  final FirestoreService _dbService = FirestoreService();
   final TextEditingController _searchController = TextEditingController();
   List<Word> _searchResults = [];
-  List<Collection> _collections = [];
-  List<int> _selectedCollectionIds = []; // Empty means "All Collections"
+  // List<Collection> _collections = []; // Removed for StreamBuilder
+  List<String> _selectedCollectionIds = []; // Empty means "All Collections"
   bool _isLoading = false;
   bool _isSearchExpanded = false;
   Timer? _debounce;
@@ -30,17 +30,13 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
-    _loadCollections();
+    // _loadCollections(); // Removed
     _performSearch(); // Load all words by default
-  }
-
-  Future<void> _loadCollections() async {
-    final cols = await _dbService.getCollections();
-    setState(() {
-      _collections = cols;
-    });
   }
 
   void _onSearchChanged(String query) {
@@ -148,7 +144,9 @@ class _SearchPageState extends State<SearchPage> {
                    example: exCtrl.text
                  );
                  await _dbService.updateWord(updatedWord);
-                 Navigator.pop(ctx);
+                 if (ctx.mounted) { 
+                   Navigator.pop(ctx);
+                 }
                  _performSearch();
               }
             },
@@ -239,6 +237,7 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       body: SafeArea(
@@ -270,10 +269,14 @@ class _SearchPageState extends State<SearchPage> {
               const SizedBox(height: 10),
 
               // Filter Dropdown (Multi-Select)
-              Builder(
-                builder: (context) {
-                  List<String> collectionNames = _collections.map((c) => c.name).toList();
-                  List<String> selectedNames = _collections
+              StreamBuilder<List<Collection>>(
+                stream: _dbService.getCollectionsStream(),
+                builder: (context, snapshot) {
+                  final collections = snapshot.data ?? [];
+                  List<String> collectionNames = collections.map((c) => c.name).toList();
+                  
+                  // Filter valid selected IDs
+                  List<String> selectedNames = collections
                       .where((c) => _selectedCollectionIds.contains(c.id))
                       .map((c) => c.name)
                       .toList();
@@ -284,7 +287,7 @@ class _SearchPageState extends State<SearchPage> {
                     hint: "Filter by Collection (All)",
                     onChanged: (List<String> newSelectedNames) {
                       setState(() {
-                        _selectedCollectionIds = _collections
+                        _selectedCollectionIds = collections
                             .where((c) => newSelectedNames.contains(c.name))
                             .map((c) => c.id!)
                             .toList();
@@ -327,7 +330,6 @@ class _SearchPageState extends State<SearchPage> {
                   color: Colors.deepPurpleAccent,
                   backgroundColor: const Color(0xFF1E1E1E),
                   onRefresh: () async {
-                    await _loadCollections();
                     await _performSearch();
                   },
                   child: _isLoading 

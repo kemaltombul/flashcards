@@ -5,15 +5,14 @@ import 'dart:ui';
 import 'dart:async';
 import 'dart:math';
 
-import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 import '../services/scoring_service.dart';
 import '../models/word.dart';
 import '../models/telemetry_data.dart';
 
 /// Displays flashcards for a collection, supporting both study and game modes.
-/// Displays flashcards for a collection, supporting both study and game modes.
 class FlashcardPage extends StatefulWidget {
-  final int collectionId;
+  final String collectionId;
   final String collectionName;
   final bool isGame;
 
@@ -46,7 +45,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
   String _currentBackground = 'assets/images/bg1.jpg';
   bool _isImageLoaded = false;
 
-  final DatabaseService _dbService = DatabaseService();
+  final FirestoreService _dbService = FirestoreService();
   
   int _currentIndex = 0;
   List<Word> _words = [];
@@ -63,12 +62,12 @@ class _FlashcardPageState extends State<FlashcardPage> {
   int _popupDurationMs = 0;
   bool _popupOpened = false;
   int _sessionStep = 0; // Incremented per card view
-  late int _sessionId; // Random session ID to group logs
+  late String _sessionId; // Random session ID to group logs
 
   @override
   void initState() {
     super.initState();
-    _sessionId = DateTime.now().millisecondsSinceEpoch; // Unique session ID
+    _sessionId = DateTime.now().millisecondsSinceEpoch.toString(); // Unique session ID
     _cardShownTime = DateTime.now(); // Start tracking first card
     
     if (_backgroundImages.isNotEmpty) {
@@ -152,7 +151,12 @@ class _FlashcardPageState extends State<FlashcardPage> {
 
     final word = _words[_currentIndex];
     final now = DateTime.now();
-    final durationMs = now.difference(_cardShownTime).inMilliseconds;
+    int durationMs = now.difference(_cardShownTime).inMilliseconds;
+
+    // Cap duration at 45 seconds (45000 ms)
+    if (durationMs > 45000) {
+      durationMs = 45000;
+    }
 
     // Calculate popup duration if it was opened
     if (_popupOpened && _popupOpenTime != null) {
@@ -164,6 +168,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
       durationMs / 1000.0, 
       _popupOpened
     );
+
 
     // Context metrics
     final hoursSinceView = word.lastReviewedAt != null 
@@ -185,17 +190,23 @@ class _FlashcardPageState extends State<FlashcardPage> {
       durationMs: durationMs,
       popupOpened: _popupOpened,
       popupDurationMs: _popupDurationMs,
-      actionType: actionType,
+      // actionType: actionType, // Removed from model
       wordLength: word.word.length,
       sessionStepIndex: ++_sessionStep,
-      totalViewCount: word.viewCount, // Make sure Word model has this field or add it
+      totalViewCount: word.viewCount,
       hoursSinceLastView: hoursSinceView,
       currentAlgoScore: score,
       userRating: userRating,
     );
 
     // Fire and forget logging (don't block UI)
-    _dbService.logTelemetry(log);
+    final logId = await _dbService.logTelemetry(log);
+    
+    // If user provided a rating and we have a valid log ID, save it to the Word document
+    if (userRating != null && logId != null) {
+      _dbService.addRatingToWord(word.id!, userRating, logId);
+    }
+
     _dbService.updateWordStats(word.id!);
 
     // Reset metrics for next card

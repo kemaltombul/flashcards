@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../services/database_service.dart';
+import '../services/firestore_service.dart';
+import '../services/auth_service.dart';
 import '../models/collection.dart';
 import 'flashcard_page.dart';
 
@@ -16,11 +17,9 @@ class CollectionsPage extends StatefulWidget {
   State<CollectionsPage> createState() => _CollectionsPageState();
 }
 
-class _CollectionsPageState extends State<CollectionsPage> {
-  final DatabaseService _dbService = DatabaseService();
+class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAliveClientMixin {
+  final FirestoreService _dbService = FirestoreService();
   
-  List<Collection> _collections = [];
-
   // Colors
   final Color _backgroundColor = const Color(0xFF121212);
   final Color _cardColor = const Color(0xFF1E1E1E);
@@ -34,21 +33,14 @@ class _CollectionsPageState extends State<CollectionsPage> {
   );
 
   @override
+  bool get wantKeepAlive => true; // Keep page alive
+
+  @override
   void initState() {
     super.initState();
-    // Load collections on startup
-    _refreshCollections();
   }
   
-  /// Fetches the latest list of collections from the database.
-  void _refreshCollections() async {
-    final data = await _dbService.getCollections();
-    if (mounted) {
-      setState(() {
-        _collections = data;
-      });
-    }
-  }
+  /// Creates a custom page transition with fade and scale effects.
 
   /// Creates a custom page transition with fade and scale effects.
   Route _createFluidRoute(Widget page) {
@@ -149,7 +141,6 @@ class _CollectionsPageState extends State<CollectionsPage> {
                     if (controller.text.isNotEmpty) {
                       await _dbService.createCollection(controller.text, isGameMode);
                       if (context.mounted) {
-                        _refreshCollections();
                         Navigator.pop(context);
                       }
                     }
@@ -197,7 +188,6 @@ class _CollectionsPageState extends State<CollectionsPage> {
                 if (controller.text.isNotEmpty && controller.text != collection.name) {
                   await _dbService.updateCollectionName(collection.id!, controller.text);
                   if (context.mounted) {
-                    _refreshCollections();
                     Navigator.pop(context);
                   }
                 }
@@ -210,127 +200,108 @@ class _CollectionsPageState extends State<CollectionsPage> {
     );
   }
 
-  /// Handles importing a collection from a JSON file.
-  void _importJson() async {
-    String result = await _dbService.importFromJson();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result, style: const TextStyle(color: Colors.black)), backgroundColor: _accentColor, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
-    }
-    _refreshCollections();
-  }
 
-  /// Exports telemetry logs to a JSON file.
-  void _exportTelemetry() async {
-    String result = await _dbService.exportTelemetryData();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result, style: const TextStyle(color: Colors.black)), 
-          backgroundColor: _accentColor,
-          behavior: SnackBarBehavior.floating
-        )
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     // Check if Mobile or Web
 
     Widget content = Scaffold(
       backgroundColor: _backgroundColor,
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              backgroundColor: _backgroundColor,
-              floating: true,
-              expandedHeight: 80,
-              flexibleSpace: FlexibleSpaceBar(
-                titlePadding: const EdgeInsets.only(left: 24, bottom: 12),
-                title: Text("My Library", style: _textStyle.copyWith(fontSize: 24, fontWeight: FontWeight.bold)),
-              ),
-              actions: [
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.white70),
-                  onSelected: (value) {
-                    if (value == 'export_telemetry') {
-                      _exportTelemetry();
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'export_telemetry',
-                      child: Row(
-                        children: [
-                          Icon(Icons.analytics_outlined, color: Colors.blueGrey),
-                          SizedBox(width: 8),
-                          Text("Export Telemetry"),
-                        ],
-                      ),
+        child: StreamBuilder<List<Collection>>(
+          stream: _dbService.getCollectionsStream(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final collections = snapshot.data ?? [];
+
+            return CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  backgroundColor: _backgroundColor,
+                  floating: true,
+                  expandedHeight: 80,
+                  flexibleSpace: FlexibleSpaceBar(
+                    titlePadding: const EdgeInsets.only(left: 24, bottom: 12),
+                    title: Text("My Library", style: _textStyle.copyWith(fontSize: 24, fontWeight: FontWeight.bold)),
+                  ),
+                  actions: [
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, color: Colors.white70),
+                      onSelected: (value) {
+                        if (value == 'logout') {
+                          AuthService().signOut();
+                        }
+                      },
+                      itemBuilder: (context) => [
+
+                        const PopupMenuItem(
+                          value: 'logout',
+                          child: Row(
+                            children: [
+                              Icon(Icons.logout, color: Colors.redAccent),
+                              SizedBox(width: 8),
+                              Text("Logout"),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(width: 10),
                   ],
                 ),
-                const SizedBox(width: 10),
-              ],
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                child: Text("Manage your collections", style: _textStyle.copyWith(fontSize: 14, color: Colors.white54)),
-              ),
-            ),
-            _collections.isEmpty
-                ? SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.dashboard_customize_outlined, size: 70, color: Colors.white10),
-                          const SizedBox(height: 20),
-                          Text("No Collections Yet", style: _textStyle.copyWith(fontSize: 18, color: Colors.white38)),
-                        ],
-                      ),
-                    ),
-                  )
-                : SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 1.4, 
-                        crossAxisSpacing: 15,
-                        mainAxisSpacing: 15,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final collection = _collections[index];
-                          return _buildDarkCard(collection);
-                        },
-                        childCount: _collections.length,
-                      ),
-                    ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                    child: Text("Manage your collections", style: _textStyle.copyWith(fontSize: 14, color: Colors.white54)),
                   ),
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
+                ),
+                collections.isEmpty
+                    ? SliverFillRemaining(
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.dashboard_customize_outlined, size: 70, color: Colors.white10),
+                              const SizedBox(height: 20),
+                              Text("No Collections Yet", style: _textStyle.copyWith(fontSize: 18, color: Colors.white38)),
+                            ],
+                          ),
+                        ),
+                      )
+                    : SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        sliver: SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 1.4, 
+                            crossAxisSpacing: 15,
+                            mainAxisSpacing: 15,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final collection = collections[index];
+                              return _buildDarkCard(collection);
+                            },
+                            childCount: collections.length,
+                          ),
+                        ),
+                      ),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
+            );
+          }
         ),
       ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 15),
-            child: FloatingActionButton.small(
-              heroTag: "importBtn",
-              onPressed: _importJson,
-              backgroundColor: _cardColor,
-              foregroundColor: Colors.white, 
-              elevation: 4,
-              tooltip: "Import JSON",
-              child: const Icon(Icons.cloud_upload_outlined),
-            ),
-          ),
+
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -376,30 +347,16 @@ class _CollectionsPageState extends State<CollectionsPage> {
     final Color iconColor = collection.isGame ? Colors.orangeAccent : Colors.blueAccent;
 
     return GestureDetector(
-      onTap: () async {
-        int count = await _dbService.getWordCount(collection.id!);
-        if (count > 0) {
-           if (mounted) {
-             await Navigator.of(context).push(_createFluidRoute(
-               FlashcardPage(
-                 collectionId: collection.id!, 
-                 collectionName: collection.name,
-                 isGame: collection.isGame,
-               )
-             ));
-             _refreshCollections();
-           }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Empty Collection! Add words first.", style: TextStyle(color: Colors.white)), 
-                backgroundColor: Colors.redAccent, 
-                behavior: SnackBarBehavior.floating
-              )
-            );
-          }
-        }
+      onTap: () {
+         if (mounted) {
+           Navigator.of(context).push(_createFluidRoute(
+             FlashcardPage(
+               collectionId: collection.id!, 
+               collectionName: collection.name,
+               isGame: collection.isGame,
+             )
+           ));
+         }
       },
       onLongPress: () => _showOptionsSheet(collection),
       child: Container(
@@ -424,14 +381,12 @@ class _CollectionsPageState extends State<CollectionsPage> {
                       GestureDetector(
                         onTap: () async {
                           await _dbService.updateCollectionMode(collection.id!, !collection.isGame);
-                          _refreshCollections();
                         },
                         child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(modeIcon, color: iconColor, size: 18)),
                       ),
                       InkWell(
                         onTap: () async {
                           await _dbService.toggleFavorite(collection.id!, collection.isFavorite);
-                          _refreshCollections();
                         },
                         child: Icon(collection.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, color: collection.isFavorite ? Colors.amber : Colors.white38, size: 24),
                       )
@@ -468,10 +423,10 @@ class _CollectionsPageState extends State<CollectionsPage> {
           title: Text("Download as JSON", style: _textStyle),
           onTap: () async {
             Navigator.pop(sheetContext);
-            String res = await _dbService.exportCollectionAsJson(collection.id!, collection.name);
+            // String res = await _dbService.exportCollectionAsJson(collection.id!, collection.name);
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(res, style: const TextStyle(color: Colors.black)), backgroundColor: _accentColor)
+                SnackBar(content: Text("Export disabled for Cloud migration", style: const TextStyle(color: Colors.black)), backgroundColor: _accentColor)
               );
             }
           }
@@ -504,7 +459,6 @@ class _CollectionsPageState extends State<CollectionsPage> {
             if (confirm == true) {
               await _dbService.deleteCollection(collection.id!);
               if (context.mounted) {
-                _refreshCollections();
               }
             }
           },

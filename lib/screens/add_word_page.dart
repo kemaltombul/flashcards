@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 import '../models/word.dart';
 import '../models/collection.dart';
 import '../services/ai_service.dart';
@@ -13,18 +13,18 @@ enum AddMode { manual, smart, json }
 
 /// Page for adding a new word to a specific collection.
 class AddWordPage extends StatefulWidget {
-  final int? collectionId;
+  final String? collectionId;
   const AddWordPage({super.key, this.collectionId});
 
   @override
   State<AddWordPage> createState() => _AddWordPageState();
 }
 
-class _AddWordPageState extends State<AddWordPage> {
+class _AddWordPageState extends State<AddWordPage> with AutomaticKeepAliveClientMixin {
   AddMode _currentMode = AddMode.smart;
   bool _isLoading = false;
-  List<Collection> _collections = [];
-  int? _selectedCollectionId;
+  // List<Collection> _collections = []; // Removed in favor of StreamBuilder
+  String? _selectedCollectionId;
   
   // Auto-Save Logic
   Timer? _autoSaveTimer;
@@ -45,8 +45,11 @@ class _AddWordPageState extends State<AddWordPage> {
   final _trFocus = FocusNode();
   final _exFocus = FocusNode();
   
-  final DatabaseService _dbService = DatabaseService();
+  final FirestoreService _dbService = FirestoreService();
   final AIService _aiService = AIService();
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -54,19 +57,7 @@ class _AddWordPageState extends State<AddWordPage> {
     if (widget.collectionId != null) {
       _selectedCollectionId = widget.collectionId!;
     }
-    _loadCollections();
-  }
-
-  Future<void> _loadCollections() async {
-    final cols = await _dbService.getCollections();
-    setState(() {
-      _collections = cols;
-      if (_collections.isNotEmpty) {
-        // If no ID passed, or passed ID not in list, default to first
-        bool idExists = widget.collectionId != null && _collections.any((c) => c.id == widget.collectionId);
-        _selectedCollectionId = idExists ? widget.collectionId! : _collections.first.id!;
-      }
-    });
+    // _loadCollections(); // Removed
   }
 
   @override
@@ -85,6 +76,7 @@ class _AddWordPageState extends State<AddWordPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     // Check if Mobile or Web
     bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
@@ -624,47 +616,71 @@ class _AddWordPageState extends State<AddWordPage> {
   }
 
   Widget _buildCollectionSelector() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), // adjusted vertical to account for internal button height
-      decoration: BoxDecoration(
-        color: Colors.black12,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: _collections.isEmpty 
-          ? const Center(child: Text("No collections. Please create one.", style: TextStyle(color: Colors.redAccent)))
-          : DropdownButton<int>(
-          value: _selectedCollectionId,
-          hint: const Text("Select Collection", style: TextStyle(color: Colors.white54)),
-          isExpanded: true,
-          dropdownColor: const Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.circular(12),
-          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-          items: _collections.map((col) {
-            return DropdownMenuItem<int>(
-              value: col.id,
-              child: Row(
-                children: [
-                   Icon(
-                    col.isGame ? Icons.videogame_asset : Icons.book, 
-                    size: 18, 
-                    color: Colors.grey
+    return StreamBuilder<List<Collection>>(
+      stream: _dbService.getCollectionsStream(),
+      builder: (context, snapshot) {
+        final collections = snapshot.data ?? [];
+        
+        // Ensure selected ID is valid
+        String? validSelectedId = _selectedCollectionId;
+        if (collections.isNotEmpty) {
+           if (validSelectedId == null || !collections.any((c) => c.id == validSelectedId)) {
+             validSelectedId = collections.first.id;
+             // We can't setState here during build, but we can treat this as the selection
+             // Note: Ideally we update the state variable too, but for display let's use validSelectedId
+             // To ensure _saveWord uses correct ID, we might need to handle this carefully.
+             // Auto-selecting the first one if null:
+             WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_selectedCollectionId != validSelectedId && mounted) {
+                  setState(() => _selectedCollectionId = validSelectedId);
+                }
+             });
+           }
+        }
+        
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.black12,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: collections.isEmpty 
+              ? const Center(child: Text("No collections. Please create one.", style: TextStyle(color: Colors.redAccent)))
+              : DropdownButton<String>(
+              value: validSelectedId,
+              hint: const Text("Select Collection", style: TextStyle(color: Colors.white54)),
+              isExpanded: true,
+              dropdownColor: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(12),
+              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+              items: collections.map((col) {
+                return DropdownMenuItem<String>(
+                  value: col.id,
+                  child: Row(
+                    children: [
+                       Icon(
+                        col.isGame ? Icons.videogame_asset : Icons.book, 
+                        size: 18, 
+                        color: Colors.grey
+                      ),
+                      const SizedBox(width: 10),
+                      Text(col.name, overflow: TextOverflow.ellipsis),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  Text(col.name ?? "Unknown"),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) {
-              setState(() => _selectedCollectionId = val);
-            }
-          },
-        ),
-      ),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _selectedCollectionId = val);
+                }
+              },
+            ),
+          ),
+        );
+      }
     );
   }
 
