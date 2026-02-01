@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/ai_service.dart';
 import '../services/firestore_service.dart';
-import '../models/collection.dart';
+
 import '../models/word.dart';
+import '../widgets/collection_selector.dart';
 
 class ScanDialog extends StatefulWidget {
   final String? preselectedCollectionId;
@@ -26,7 +27,7 @@ class _ScanDialogState extends State<ScanDialog> {
   final Set<String> _selectedWords = {};
   
   String? _selectedCollectionId;
-  List<Collection> _collections = [];
+
 
   final ImagePicker _picker = ImagePicker();
 
@@ -40,22 +41,12 @@ class _ScanDialogState extends State<ScanDialog> {
   void initState() {
     super.initState();
     _selectedCollectionId = widget.preselectedCollectionId;
-    _loadCollections();
   }
 
   // ... (keeping methods like _loadCollections, _pickImage, _analyzeImage, _processWords same, 
   // ensuring to check mounted before using context) 
 
-  Future<void> _loadCollections() async {
-    final cols = await _dbService.getCollections();
-    if (!mounted) return;
-    setState(() {
-      _collections = cols;
-      if (_selectedCollectionId == null && cols.isNotEmpty) {
-        _selectedCollectionId = cols.first.id;
-      }
-    });
-  }
+
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -177,21 +168,11 @@ class _ScanDialogState extends State<ScanDialog> {
               child: Column(
                 children: [
              // Collection Dropdown
-             if (_collections.isNotEmpty)
                Padding(
                  padding: const EdgeInsets.all(16.0),
-                 child: DropdownButtonFormField<String>(
-                   dropdownColor: _cardColor,
-                   style: const TextStyle(color: Colors.white),
-                   value: _selectedCollectionId,
-                   decoration: InputDecoration(
-                     filled: true,
-                     fillColor: _cardColor,
-                     labelText: "Target Collection",
-                     labelStyle: TextStyle(color: _accentColor),
-                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                   ),
-                   items: _collections.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                 child: CollectionSelector(
+                   selectedId: _selectedCollectionId,
+                   label: "Target Collection",
                    onChanged: (val) => setState(() => _selectedCollectionId = val),
                  ),
                ),
