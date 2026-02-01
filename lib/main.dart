@@ -5,7 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:english_flashcards/firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:english_flashcards/services/auth_service.dart';
-import 'screens/main_page.dart';
+import 'screens/collections_page.dart';
 import 'screens/login_page.dart';
 
 void main() async {
@@ -37,14 +37,20 @@ class VocabularyApp extends StatelessWidget {
       title: 'Flash Cards',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // Theme colors
-        primaryColor: const Color(0xFF121212),
-        scaffoldBackgroundColor: const Color(0xFF121212),
+        // Zen Theme Colors
+        primaryColor: const Color(0xFF0F0F0F), // Soft Black
+        scaffoldBackgroundColor: const Color(0xFF0F0F0F),
+        cardColor: const Color(0xFF1E1E1E), 
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark, // Dark mode
+          seedColor: const Color(0xFFD0BCFF), // Soft Lavender
+          brightness: Brightness.dark,
+          surface: const Color(0xFF1E1E1E),
+          background: const Color(0xFF0F0F0F),
         ),
         useMaterial3: true,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Color(0xFFE0E0E0)),
+        ),
       ),
       // Auth Gate
       home: StreamBuilder(
@@ -56,7 +62,7 @@ class VocabularyApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData) {
-            return const MainPage();
+            return const CollectionsPage(); // Direct to Collections
           }
           return const LoginPage();
         },

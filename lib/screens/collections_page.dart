@@ -8,6 +8,7 @@ import '../models/collection.dart';
 import '../dialogs/add_collection_dialog.dart';
 import '../dialogs/rename_collection_dialog.dart';
 import 'flashcard_page.dart';
+import 'search_page.dart';
 
 
 
@@ -23,9 +24,10 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
   final FirestoreService _dbService = FirestoreService();
   
   // Colors
-  final Color _backgroundColor = const Color(0xFF121212);
-  final Color _cardColor = const Color(0xFF1E1E1E);
-  final Color _accentColor = const Color(0xFFBB86FC);
+  // Zen Colors
+  final Color _backgroundColor = Colors.transparent; // Handled by Main Scaffold
+  final Color _cardColor = const Color(0xFF252525).withOpacity(0.9); 
+  final Color _accentColor = const Color(0xFFD0BCFF); // Soft Lavender
 
   // Font Style
   final TextStyle _textStyle = const TextStyle(
@@ -127,44 +129,55 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
             return CustomScrollView(
               slivers: [
                 SliverAppBar(
-                  backgroundColor: _backgroundColor,
-                  floating: true,
-                  expandedHeight: 80,
+                  backgroundColor: Colors.transparent,
+                  expandedHeight: 120,
+                  floating: false,
+                  pinned: false,
                   flexibleSpace: FlexibleSpaceBar(
-                    titlePadding: const EdgeInsets.only(left: 24, bottom: 12),
-                    title: Text("My Library", style: _textStyle.copyWith(fontSize: 24, fontWeight: FontWeight.bold)),
-                  ),
-                  actions: [
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert, color: Colors.white70),
-                      onSelected: (value) {
-                        if (value == 'logout') {
-                          AuthService().signOut();
-                        }
-                      },
-                      itemBuilder: (context) => [
-
-                        const PopupMenuItem(
-                          value: 'logout',
-                          child: Row(
-                            children: [
-                              Icon(Icons.logout, color: Colors.redAccent),
-                              SizedBox(width: 8),
-                              Text("Logout"),
-                            ],
-                          ),
+                    titlePadding: const EdgeInsets.only(left: 24, bottom: 20),
+                    title: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Good Evening,", 
+                          style: _textStyle.copyWith(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.normal)
+                        ),
+                        Text("Kemal", 
+                          style: _textStyle.copyWith(fontSize: 28, fontWeight: FontWeight.w300)
                         ),
                       ],
                     ),
-                    const SizedBox(width: 10),
+                    centerTitle: false, 
+                  ),
+                  actions: [
+                    Container(
+                      margin: const EdgeInsets.only(right: 15, top: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.search_rounded, color: Colors.white70, size: 24),
+                        tooltip: 'Search Words',
+                        onPressed: () {
+                           Navigator.push(context, MaterialPageRoute(builder: (context) => const SearchPage()));
+                        },
+                      ),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(right: 20, top: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.logout_rounded, color: Colors.white70, size: 20),
+                        onPressed: () => AuthService().signOut(),
+                      ),
+                    ),
                   ],
                 ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                    child: Text("Manage your collections", style: _textStyle.copyWith(fontSize: 14, color: Colors.white54)),
-                  ),
-                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
                 collections.isEmpty
                     ? SliverFillRemaining(
                         child: Center(
@@ -247,9 +260,9 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
   /// Builds a single collection card with gestures.
   Widget _buildDarkCard(Collection collection) {
     // Styling based on mode
-    final Color borderColor = collection.isGame ? Colors.orangeAccent.withValues(alpha: 0.5) : Colors.blueAccent.withValues(alpha: 0.3);
-    final IconData modeIcon = collection.isGame ? Icons.gamepad_outlined : Icons.menu_book_rounded;
-    final Color iconColor = collection.isGame ? Colors.orangeAccent : Colors.blueAccent;
+    final bool isGame = collection.isGame;
+    // Zen Card Styling
+    final Color iconColor = isGame ? const Color(0xFFFFB74D) : const Color(0xFF64B5F6); // Softer Orange / Blue
 
     return GestureDetector(
       onTap: () {
@@ -267,41 +280,87 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
       child: Container(
         decoration: BoxDecoration(
           color: _cardColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor, width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))],
-        ),
-        child: Stack(
-          children: [
-            Positioned(right: -10, bottom: -10, child: Icon(modeIcon, size: 80, color: Colors.white.withValues(alpha: 0.03))),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GestureDetector(
-                        onTap: () async {
-                          await _dbService.updateCollectionMode(collection.id!, !collection.isGame);
-                        },
-                        child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(modeIcon, color: iconColor, size: 18)),
-                      ),
-                      InkWell(
-                        onTap: () async {
-                          await _dbService.toggleFavorite(collection.id!, collection.isFavorite);
-                        },
-                        child: Icon(collection.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, color: collection.isFavorite ? Colors.amber : Colors.white38, size: 24),
-                      )
-                    ],
-                  ),
-                  Text(collection.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: _textStyle.copyWith(fontSize: 16, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
+          borderRadius: BorderRadius.circular(28), // Softer corners
+          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2), 
+              blurRadius: 15, 
+              offset: const Offset(0, 8)
+            )
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Stack(
+            children: [
+              // Subtle background gradient/icon
+              Positioned(
+                right: -15, 
+                bottom: -15, 
+                child: Icon(
+                  isGame ? Icons.gamepad_rounded : Icons.menu_book_rounded, 
+                  size: 100, 
+                  color: iconColor.withOpacity(0.05)
+                )
+              ),
+              
+              Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Pill-shaped mode indicator
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: iconColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(isGame ? Icons.gamepad : Icons.book, color: iconColor, size: 14),
+                              const SizedBox(width: 5),
+                              Text(
+                                isGame ? "Game" : "Study",
+                                style: TextStyle(color: iconColor, fontSize: 10, fontWeight: FontWeight.bold),
+                              )
+                            ],
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () async {
+                            await _dbService.toggleFavorite(collection.id!, collection.isFavorite);
+                          },
+                          child: Icon(
+                            collection.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, 
+                            color: collection.isFavorite ? const Color(0xFFFFD54F) : Colors.white24, 
+                            size: 22
+                          ),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      collection.name, 
+                      maxLines: 2, 
+                      overflow: TextOverflow.ellipsis, 
+                      style: _textStyle.copyWith(fontSize: 18, fontWeight: FontWeight.w500, height: 1.2)
+                    ),
+                    const SizedBox(height: 5),
+                     Text(
+                      "Tap to study",
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -311,7 +370,7 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
   void _showOptionsSheet(Collection collection) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _cardColor,
+      backgroundColor: const Color(0xFF1E1E1E),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (sheetContext) => Wrap(children: [
 
