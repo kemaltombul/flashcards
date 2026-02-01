@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
 import '../models/collection.dart';
+import '../dialogs/add_collection_dialog.dart';
+import '../dialogs/rename_collection_dialog.dart';
 import 'flashcard_page.dart';
 
 
@@ -89,114 +91,17 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
 
   /// Displays a dialog to create a new collection.
   void _showAddCollectionDialog() {
-    final TextEditingController controller = TextEditingController();
-    bool isGameMode = true; 
-
     showDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: _cardColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Text("New Collection", style: _textStyle.copyWith(color: _accentColor, fontSize: 20, fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: controller,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: "Ex: A1 Verbs",
-                      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
-                      filled: true,
-                      fillColor: Colors.black12,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  
-                  SwitchListTile(
-                    title: Text("Game Mode", style: _textStyle.copyWith(fontSize: 16)),
-                    subtitle: Text(
-                      isGameMode ? "Timer ON, Meaning Hidden" : "Timer OFF, Show Meaning",
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                    value: isGameMode,
-                    activeTrackColor: _accentColor,
-                    onChanged: (val) {
-                      setState(() {
-                        isGameMode = val;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancel", style: _textStyle.copyWith(color: Colors.grey.shade400))),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: _accentColor, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                  onPressed: () async {
-                    if (controller.text.isNotEmpty) {
-                      await _dbService.createCollection(controller.text, isGameMode);
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                      }
-                    }
-                  },
-                  child: const Text("Create", style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            );
-          }
-        );
-      },
+      builder: (context) => const AddCollectionDialog(),
     );
   }
 
   /// Displays a dialog to rename a collection.
   void _showRenameDialog(Collection collection) {
-    final TextEditingController controller = TextEditingController(text: collection.name);
-
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: _cardColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text("Rename Collection", style: _textStyle.copyWith(color: _accentColor, fontSize: 20, fontWeight: FontWeight.bold)),
-          content: TextField(
-            controller: controller,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: "Enter new name",
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
-              filled: true,
-              fillColor: Colors.black12,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context), 
-              child: Text("Cancel", style: _textStyle.copyWith(color: Colors.grey.shade400))
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _accentColor, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-              onPressed: () async {
-                if (controller.text.isNotEmpty && controller.text != collection.name) {
-                  await _dbService.updateCollectionName(collection.id!, controller.text);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                  }
-                }
-              },
-              child: const Text("Save", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
+      builder: (context) => RenameCollectionDialog(collection: collection),
     );
   }
 

@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:dart_openai/dart_openai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'package:image_picker/image_picker.dart';
 import 'firestore_service.dart';
 
 class AIService {
@@ -8,6 +11,7 @@ class AIService {
 
   // OpenAI API Configuration
   final String _apiKey = dotenv.env['OPENAI_API_KEY'] ?? ""; 
+ 
 
   AIService() {
     // Initialize OpenAI
@@ -164,6 +168,80 @@ Returns: {"word": "...", "definition": "...", "meaning_tr": "...", "example": ".
 
     } catch (e) {
       throw Exception("Failed to fetch data from AI: $e");
+    }
+  }
+  /// Extracts underlined/highlighted words from an image using OpenAI Vision (GPT-4o).
+  /// Uses raw HTTP to avoid dart_openai serialization issues with image URLs.
+  Future<List<String>> extractWordsFromImage(XFile imageFile) async {
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      final url = Uri.parse('https://api.openai.com/v1/chat/completions');
+      
+      final payload = {
+        "model": "gpt-4o",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a helpful assistant that identifies specific vocabulary in images."
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": """
+                Identify English words in this image that are explicitly **underlined**, **highlighted**, or **encircled**.
+                Ignore general text, page titles, or instructions. Focus ONLY on the marked vocabulary.
+                Return a STRICT JSON object with a single key "words" containing the list of strings.
+                Example: {"words": ["mitigate", "ephemeral"]}
+                """
+              },
+              {
+                "type": "image_url",
+                "image_url": {
+                  "url": "data:image/jpeg;base64,$base64Image"
+                }
+              }
+            ]
+          }
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.1
+      };
+
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $_apiKey",
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final content = data['choices'][0]['message']['content'];
+        
+        if (content != null) {
+           dynamic decoded = jsonDecode(content);
+           
+           if (decoded is Map<String, dynamic> && decoded.containsKey('words')) {
+             return List<String>.from(decoded['words'].map((e) => e.toString()));
+           } else {
+             throw Exception("Unexpected JSON format from AI: $content");
+           }
+        }
+      } else {
+        throw Exception("OpenAI API Error: ${response.statusCode} - ${response.body}");
+      }
+
+      throw Exception("Empty response from AI");
+
+    } catch (e) {
+      print("OpenAI Vision Error: $e");
+      rethrow; 
     }
   }
 }

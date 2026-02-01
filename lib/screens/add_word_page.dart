@@ -7,6 +7,7 @@ import '../services/firestore_service.dart';
 import '../models/word.dart';
 import '../models/collection.dart';
 import '../services/ai_service.dart';
+import '../dialogs/scan_dialog.dart';
 
 
 enum AddMode { manual, smart, json }
@@ -198,6 +199,20 @@ class _AddWordPageState extends State<AddWordPage> with AutomaticKeepAliveClient
             focusNode: _wordFocus,
             nextFocus: _defFocus,
             validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a word' : null,
+            suffix: Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: IconButton(
+                icon: const Icon(Icons.camera_alt_rounded, color: Colors.deepPurpleAccent, size: 22),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => ScanDialog(preselectedCollectionId: _selectedCollectionId),
+                  );
+                },
+                tooltip: "Scan from Image",
+                splashRadius: 20, 
+              ),
+            ),
           ),
           const SizedBox(height: 15),
           _buildModernTextField(
@@ -274,6 +289,20 @@ class _AddWordPageState extends State<AddWordPage> with AutomaticKeepAliveClient
           focusNode: _wordFocus,
           nextFocus: _defFocus,
           validator: (v) => v == null || v.trim().isEmpty ? 'Enter a word for AI' : null,
+          suffix: Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: IconButton(
+              icon: const Icon(Icons.camera_alt_rounded, color: Colors.deepPurpleAccent, size: 22),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => ScanDialog(preselectedCollectionId: _selectedCollectionId),
+                );
+              },
+              tooltip: "Scan from Image",
+              splashRadius: 20, 
+            ),
+          ),
         ),
         const SizedBox(height: 15),
         _buildModernTextField(
@@ -572,6 +601,7 @@ class _AddWordPageState extends State<AddWordPage> with AutomaticKeepAliveClient
     String? Function(String?)? validator,
     TextCapitalization capitalization = TextCapitalization.none,
     void Function(String)? onSubmitted,
+    Widget? suffix,
   }) {
     return TextFormField(
       controller: controller,
@@ -593,6 +623,7 @@ class _AddWordPageState extends State<AddWordPage> with AutomaticKeepAliveClient
         labelText: label,
         labelStyle: TextStyle(color: Colors.grey.shade400),
         prefixIcon: Icon(icon, color: Colors.deepPurpleAccent),
+        suffixIcon: suffix,
         filled: true,
         fillColor: const Color(0xFF2C2C2C),
         border: OutlineInputBorder(
