@@ -18,9 +18,9 @@ class _LoginPageState extends State<LoginPage> {
       // Navigation is handled by the StreamBuilder in main.dart
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sign in failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Sign in failed: $e')));
       }
     } finally {
       if (mounted) {
@@ -39,28 +39,24 @@ class _LoginPageState extends State<LoginPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Logo or App Name
-              const Icon(
-                Icons.style,
-                size: 80,
-                color: Colors.deepPurple,
-              ),
+              const Icon(Icons.style, size: 80, color: Colors.deepPurple),
               const SizedBox(height: 24),
               Text(
                 'English Flashcards',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Colors.deepPurple,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Sync your progress across devices',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey[600],
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
               ),
               const SizedBox(height: 48),
-              
+
               if (_isLoading)
                 const CircularProgressIndicator()
               else

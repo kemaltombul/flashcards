@@ -1,7 +1,7 @@
-
-
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
 import '../models/collection.dart';
@@ -109,6 +109,38 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
 
 
 
+  /// Calculates the appropriate greeting based on the current hour.
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 5) {
+      return "Good Night,";
+    } else if (hour < 12) {
+      return "Good Morning,";
+    } else if (hour < 17) {
+      return "Good Afternoon,";
+    } else {
+      return "Good Evening,";
+    }
+  }
+
+  /// Gets the user's display name or a fallback
+  String _getUserName() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return "Guest";
+    
+    // Check displayName first, fallback to email prefix if null
+    if (user.displayName != null && user.displayName!.isNotEmpty) {
+      // Return first name if possible
+      return user.displayName!.split(" ").first; 
+    }
+    
+    if (user.email != null) {
+      return user.email!.split("@").first;
+    }
+    
+    return "User";
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
@@ -130,28 +162,63 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
               slivers: [
                 SliverAppBar(
                   backgroundColor: Colors.transparent,
-                  expandedHeight: 120,
+                  expandedHeight: 170,
+                  toolbarHeight: 70,
                   floating: false,
                   pinned: false,
                   flexibleSpace: FlexibleSpaceBar(
-                    titlePadding: const EdgeInsets.only(left: 24, bottom: 20),
+                    titlePadding: const EdgeInsets.only(left: 24, bottom: 16),
                     title: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Good Evening,", 
+                        Text(_getGreeting(), 
                           style: _textStyle.copyWith(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.normal)
                         ),
-                        Text("Kemal", 
+                        Text(_getUserName(), 
                           style: _textStyle.copyWith(fontSize: 28, fontWeight: FontWeight.w300)
+                        ),
+                        const SizedBox(height: 8),
+                        // Streak Badge (Dynamic)
+                        StreamBuilder<int>(
+                          stream: _dbService.getUserStreakStream(),
+                          builder: (context, streakSnapshot) {
+                            final streak = streakSnapshot.data ?? 0;
+                            
+                            final bool hasStreak = streak > 0;
+                            final Color badgeColor = hasStreak ? Colors.orange : Colors.grey.withOpacity(0.5);
+
+                            return Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2C1E10),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: badgeColor.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    hasStreak ? Icons.local_fire_department_rounded : Icons.local_fire_department_outlined, 
+                                    color: badgeColor, 
+                                    size: 14
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text("$streak Day Streak", style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11)),
+                                ],
+                              ),
+                            );
+                          }
                         ),
                       ],
                     ),
                     centerTitle: false, 
                   ),
                   actions: [
+
                     Container(
-                      margin: const EdgeInsets.only(right: 15, top: 10),
+                      margin: const EdgeInsets.only(right: 15, top: 20),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.05),
                         shape: BoxShape.circle,
@@ -165,14 +232,59 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                       ),
                     ),
                     Container(
-                      margin: const EdgeInsets.only(right: 20, top: 10),
+                      margin: const EdgeInsets.only(right: 15, top: 20),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.05),
                         shape: BoxShape.circle,
                       ),
-                      child: IconButton(
-                        icon: const Icon(Icons.logout_rounded, color: Colors.white70, size: 20),
-                        onPressed: () => AuthService().signOut(),
+                      child: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, color: Colors.white70, size: 24),
+                        color: _cardColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          side: const BorderSide(color: Colors.white10),
+                        ),
+                        onSelected: (value) {
+                          if (value == 'add') {
+                            _showAddCollectionDialog();
+                          } else if (value == 'contact') {
+                            _showContactMenu();
+                          } else if (value == 'logout') {
+                            AuthService().signOut();
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'add',
+                            child: Row(
+                              children: [
+                                Icon(Icons.create_new_folder_outlined, color: _accentColor, size: 20),
+                                const SizedBox(width: 12),
+                                const Text('New Collection', style: TextStyle(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'contact',
+                            child: Row(
+                              children: [
+                                Icon(Icons.question_answer_outlined, color: _accentColor, size: 20),
+                                const SizedBox(width: 12),
+                                const Text('Contact Developer', style: TextStyle(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'logout',
+                            child: Row(
+                              children: [
+                                Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
+                                SizedBox(width: 12),
+                                Text('Logout', style: TextStyle(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -215,43 +327,6 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
           }
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 30, right: 10),
-                child: FloatingActionButton(
-                  heroTag: "contactBtn",
-                  mini: true,
-                  backgroundColor: _cardColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: const BorderSide(color: Colors.white10)),
-                  onPressed: _showContactMenu,
-                  child: const Icon(Icons.question_answer_outlined),
-                ),
-              ),
-              Expanded(
-                flex: 0,
-                child: FloatingActionButton.extended(
-                  heroTag: "addBtn",
-                  onPressed: _showAddCollectionDialog,
-                  backgroundColor: _accentColor,
-                  foregroundColor: Colors.black,
-                  elevation: 4,
-                  icon: const Icon(Icons.add),
-                  label: const Text("Collection", style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
 
     return content;
@@ -279,8 +354,7 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
       onLongPress: () => _showOptionsSheet(collection),
       child: Container(
         decoration: BoxDecoration(
-          color: _cardColor,
-          borderRadius: BorderRadius.circular(28), // Softer corners
+          borderRadius: BorderRadius.circular(28),
           border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
           boxShadow: [
             BoxShadow(
@@ -292,24 +366,37 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
-          child: Stack(
-            children: [
-              // Subtle background gradient/icon
-              Positioned(
-                right: -15, 
-                bottom: -15, 
-                child: Icon(
-                  isGame ? Icons.gamepad_rounded : Icons.menu_book_rounded, 
-                  size: 100, 
-                  color: iconColor.withOpacity(0.05)
-                )
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.1),
+                    Colors.white.withOpacity(0.05),
+                  ],
+                ),
               ),
-              
+              child: Stack(
+                children: [
+                  // Subtle background gradient/icon
+                  Positioned(
+                  right: -15, 
+                  bottom: -15, 
+                  child: Icon(
+                    isGame ? Icons.gamepad_rounded : Icons.menu_book_rounded, 
+                    size: 100, 
+                    color: iconColor.withOpacity(0.05)
+                  )
+                ),
+                
               Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -322,6 +409,7 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(isGame ? Icons.gamepad : Icons.book, color: iconColor, size: 14),
                               const SizedBox(width: 5),
@@ -339,27 +427,29 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                           child: Icon(
                             collection.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, 
                             color: collection.isFavorite ? const Color(0xFFFFD54F) : Colors.white24, 
-                            size: 22
+                            size: 20
                           ),
                         )
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const Spacer(),
                     Text(
                       collection.name, 
                       maxLines: 2, 
                       overflow: TextOverflow.ellipsis, 
-                      style: _textStyle.copyWith(fontSize: 18, fontWeight: FontWeight.w500, height: 1.2)
+                      style: _textStyle.copyWith(fontSize: 16, fontWeight: FontWeight.w500, height: 1.2)
                     ),
                     const SizedBox(height: 5),
-                     Text(
+                    const Text(
                       "Tap to study",
-                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                      style: TextStyle(color: Colors.white38, fontSize: 11),
                     ),
                   ],
                 ),
               ),
             ],
+          ),
+          ),
           ),
         ),
       ),

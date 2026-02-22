@@ -1,4 +1,3 @@
-
 class ScoringService {
   /// Determines if a user has learned a word based on implicit behavioral metrics.
   ///

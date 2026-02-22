@@ -10,8 +10,7 @@ class AIService {
   final FirestoreService _dbService = FirestoreService();
 
   // OpenAI API Configuration
-  final String _apiKey = dotenv.env['OPENAI_API_KEY'] ?? ""; 
- 
+  final String _apiKey = dotenv.env['OPENAI_API_KEY'] ?? "";
 
   AIService() {
     // Initialize OpenAI
@@ -20,9 +19,80 @@ class AIService {
     // OpenAI.organization = "YOUR_ORGANIZATION_ID";
   }
 
+  /// Parses user input to extract word, meaning, definition, and example.
+  /// Supports multiple formats:
+  /// - "word" -> word only
+  /// - "word: meaning" -> word + Turkish meaning
+  /// - "word: definition" -> word + English definition
+  /// - "example sentence" -> extract word from sentence
+  /// - "word (meaning) - definition" -> mixed format
+  Map<String, String?> _parseUserInput(String input) {
+    String trimmed = input.trim();
+    
+    // Initialize result
+    Map<String, String?> result = {
+      'word': null,
+      'meaning_tr': null,
+      'definition': null,
+      'example': null,
+    };
+
+    // Pattern 1: "word: meaning" or "word - meaning" (Turkish meaning)
+    // Detect Turkish characters to identify meaning vs definition
+    RegExp colonPattern = RegExp(r'^([a-zA-Z\s-]+)[:|-]\s*(.+)$');
+    Match? colonMatch = colonPattern.firstMatch(trimmed);
+    
+    if (colonMatch != null) {
+      String word = colonMatch.group(1)!.trim();
+      String rest = colonMatch.group(2)!.trim();
+      
+      // Check if rest contains Turkish characters (ç, ğ, ı, ö, ş, ü)
+      bool hasTurkish = RegExp(r'[çğıöşüÇĞİÖŞÜ]').hasMatch(rest);
+      
+      result['word'] = word;
+      if (hasTurkish || rest.split(' ').length <= 3) {
+        // Likely Turkish meaning
+        result['meaning_tr'] = rest;
+      } else {
+        // Likely English definition
+        result['definition'] = rest;
+      }
+      return result;
+    }
+
+    // Pattern 2: "word (meaning)" or "word [meaning]"
+    RegExp parenPattern = RegExp(r'^([a-zA-Z\s-]+)\s*[\(\[](.+?)[\)\]]');
+    Match? parenMatch = parenPattern.firstMatch(trimmed);
+    
+    if (parenMatch != null) {
+      result['word'] = parenMatch.group(1)!.trim();
+      result['meaning_tr'] = parenMatch.group(2)!.trim();
+      return result;
+    }
+
+    // Pattern 3: Sentence (contains multiple words and looks like a sentence)
+    bool isSentence = trimmed.contains(' ') && 
+                      (trimmed.split(' ').length > 3 || 
+                       RegExp(r'[.!?,]').hasMatch(trimmed));
+    
+    if (isSentence) {
+      result['example'] = trimmed;
+      // Word will be extracted by AI
+      return result;
+    }
+
+    // Pattern 4: Single word or phrase
+    result['word'] = trimmed;
+    return result;
+  }
+
   /// Generates a word with details using AI but DOES NOT save it.
   /// Returns the word data as a Map.
-  Future<Map<String, dynamic>> generateSmartWord(String inputWord, String? userDefinition, String collectionId) async {
+  Future<Map<String, dynamic>> generateSmartWord(
+    String inputWord,
+    String? userDefinition,
+    String collectionId,
+  ) async {
     try {
       // 1. Input Validation
       if (inputWord.trim().isEmpty) {
@@ -34,63 +104,89 @@ class AIService {
       // 2. Database Validation (Uniqueness Check)
       // If user provides a context/meaning, we check if THAT specific meaning exists.
       if (userDefinition != null && userDefinition.isNotEmpty) {
-         bool specificExists = await _dbService.wordAndMeaningExists(normalizedWord, userDefinition);
-         if (specificExists) {
-           throw Exception("Word '$normalizedWord' with meaning '$userDefinition' already exists.");
-         }
+        bool specificExists = await _dbService.wordAndMeaningExists(
+          normalizedWord,
+          userDefinition,
+        );
+        if (specificExists) {
+          throw Exception(
+            "Word '$normalizedWord' with meaning '$userDefinition' already exists.",
+          );
+        }
       } else {
         // Fallback: If no context provided, block if word exists at all to be safe
         bool exists = await _dbService.wordExists(normalizedWord);
         if (exists) {
-           throw Exception("Word '$normalizedWord' already exists. Add a specific meaning to add a new definition.");
+          throw Exception(
+            "Word '$normalizedWord' already exists. Add a specific meaning to add a new definition.",
+          );
         }
       }
 
-      // 3. API Request (Enrichment)
-      final Map<String, dynamic> aiData = await _fetchWordDetailsFromAI(normalizedWord, context: userDefinition);
+
+      // 3. Parse Context Input (Step 2) to extract available data
+      Map<String, String?> parsedContext = {
+        'meaning_tr': null,
+        'definition': null,
+        'example': null,
+      };
+      
+      if (userDefinition != null && userDefinition.trim().isNotEmpty) {
+        parsedContext = _parseUserInput(userDefinition);
+      }
+      
+      // 4. API Request (Enrichment) - pass parsed context to AI
+      final Map<String, dynamic> aiData = await _fetchWordDetailsFromAI(
+        normalizedWord,
+        existingMeaning: parsedContext['meaning_tr'],
+        existingDefinition: parsedContext['definition'],
+        existingExample: parsedContext['example'],
+        context: userDefinition,
+      );
 
       // 4. Return Data (instead of saving)
       return {
         'collection_id': collectionId,
-        'word': aiData['word'], 
+        'word': aiData['word'],
         'definition': aiData['definition'],
         'meaning_tr': aiData['meaning_tr'],
-        'example': aiData['example']
+        'example': aiData['example'],
       };
-
     } catch (e) {
-      rethrow; 
+      rethrow;
     }
   }
 
   /// Private helper to call the OpenAI API.
-  Future<Map<String, dynamic>> _fetchWordDetailsFromAI(String word, {String? context}) async {
-    
+  Future<Map<String, dynamic>> _fetchWordDetailsFromAI(
+    String word, {
+    String? existingMeaning,
+    String? existingDefinition,
+    String? existingExample,
+    String? context,
+  }) async {
     // Detect if the "word" itself is actually a sentence (heuristic: > 2 words or contains punctuation?)
     // If so, we treat the input string as the context, and ask the AI to extract the word.
-    bool inputIsSentence = word.trim().contains(' ') && (word.trim().split(' ').length > 2);
-    
+    bool inputIsSentence =
+        word.trim().contains(' ') && (word.trim().split(' ').length > 2);
+
     if (inputIsSentence && (context == null || context.trim().isEmpty)) {
-      context = word; 
-      // We don't clear 'word' here to let the prompt know what the user typed, 
+      context = word;
+      // We don't clear 'word' here to let the prompt know what the user typed,
       // but we add a specific instruction below.
     }
 
     String contextInstruction = "";
     if (context != null && context.trim().isNotEmpty) {
-      contextInstruction = """
-\nCONTEXT INSTRUCTION (CRITICAL):
-The user provided this specific context/sentence: "$context".
-1. **Grammar Analysis (CRITICAL)**: First, determine the grammatical role (Part of Speech) of the word "$word" IN THIS SPECIFIC SENTENCE.
-   - Is it a Verb, Noun, Adjective, etc.?
-   - IGNORE semantic bias from other words (e.g. ignore "cola" if "can" is used as a verb).
-   - Example: "Can you open the cola?" -> "Can" is a Modal Verb here. Do NOT define it as "Kutu" just because "cola" is present.
-2. **Meaning**: Provide the GENERAL dictionary meaning that matches that grammatical role.
-   - If it's a verb, give the verb meaning. If it's a noun, give the noun meaning.
-3. **Usage**: Use this context sentence as the "example" field if it is suitable (A1 level).
+      contextInstruction =
+          """
+\nCONTEXT / HINT (CRITICAL):
+The user provided this context or hint: "$context".
+1. **Meaning Disambiguation**: Use this hint to figure out which specific meaning of "$word" they want. It could be a full sentence, a Turkish translation, or a grammatical hint (e.g., "verb").
+2. **Strict Match**: The definition and Turkish meaning you generate MUST match the intent of this context.
 """;
     }
-    
+
     String extractionInstruction = "";
     if (inputIsSentence) {
       extractionInstruction = """
@@ -102,17 +198,36 @@ The user input under "Word" appears to be a full sentence.
 """;
     }
 
+    // Build existing data instruction
+    String existingDataInstruction = "";
+    if (existingMeaning != null || existingDefinition != null || existingExample != null) {
+      existingDataInstruction = "\n\nEXISTING DATA PROVIDED BY USER:";
+      if (existingMeaning != null) {
+        existingDataInstruction += "\n- Turkish Meaning: \"$existingMeaning\" (Use this if accurate, or correct it if wrong)";
+      }
+      if (existingDefinition != null) {
+        existingDataInstruction += "\n- Definition: \"$existingDefinition\" (Use this if accurate, or improve it to A1 level)";
+      }
+      if (existingExample != null) {
+        existingDataInstruction += "\n- Example: \"$existingExample\" (Extract the word from this sentence if needed)";
+      }
+      existingDataInstruction += "\n\nIMPORTANT: Fill ONLY the missing fields. Keep user-provided data if it's accurate.";
+    }
+
     // Construct the prompt
-    final String prompt = """
+    final String prompt =
+        """
 Role: Dictionary assistant for A1 (Beginner) English learners.
 Input Word/Sentence: "$word".
 $contextInstruction
 $extractionInstruction
+$existingDataInstruction
 
 Rules:
 1. Definition: Must be **CEFR A1 Level**. Use ONLY basic, high-frequency words. Max 12 words. Simple and clear.
 2. Accuracy: Provide the correct Turkish meaning (matching the context if given) and a correct, simple example sentence (A1).
-3. Output: JSON only.
+3. Smart Filling: If user provided some fields, validate them and fill ONLY what's missing.
+4. Output: JSON only.
 
 Returns: {"word": "...", "definition": "...", "meaning_tr": "...", "example": "..."}
     """;
@@ -120,23 +235,20 @@ Returns: {"word": "...", "definition": "...", "meaning_tr": "...", "example": ".
     try {
       final systemMessage = OpenAIChatCompletionChoiceMessageModel(
         content: [
-          OpenAIChatCompletionChoiceMessageContentItemModel.text(
-            prompt,
-          ),
+          OpenAIChatCompletionChoiceMessageContentItemModel.text(prompt),
         ],
         role: OpenAIChatMessageRole.system,
       );
 
       String userContent = "Word: $word";
       if (context != null && context.trim().isNotEmpty) {
-        userContent += "\nSpecific Context/Meaning: $context (Focus ONLY on this meaning)";
+        userContent +=
+            "\nSpecific Context/Meaning: $context (Focus ONLY on this meaning)";
       }
 
       final userMessage = OpenAIChatCompletionChoiceMessageModel(
         content: [
-          OpenAIChatCompletionChoiceMessageContentItemModel.text(
-            userContent,
-          ),
+          OpenAIChatCompletionChoiceMessageContentItemModel.text(userContent),
         ],
         role: OpenAIChatMessageRole.user,
       );
@@ -144,47 +256,51 @@ Returns: {"word": "...", "definition": "...", "meaning_tr": "...", "example": ".
       final chatCompletion = await OpenAI.instance.chat.create(
         model: "gpt-3.5-turbo",
         messages: [systemMessage, userMessage],
-        temperature: 0.3, 
+        temperature: 0.3,
         responseFormat: {"type": "json_object"}, // Force JSON mode
       );
 
       if (chatCompletion.choices.isNotEmpty) {
-        final content = chatCompletion.choices.first.message.content?.first.text;
-        
+        final content =
+            chatCompletion.choices.first.message.content?.first.text;
+
         if (content != null) {
           // Clean potential markdown just in case
           String cleanJson = content.trim();
           if (cleanJson.startsWith('```json')) {
-            cleanJson = cleanJson.replaceAll('```json', '').replaceAll('```', '');
+            cleanJson = cleanJson
+                .replaceAll('```json', '')
+                .replaceAll('```', '');
           } else if (cleanJson.startsWith('```')) {
             cleanJson = cleanJson.replaceAll('```', '');
           }
-          
+
           return jsonDecode(cleanJson);
         }
-      } 
-      
-      throw Exception("Empty response from OpenAI.");
+      }
 
+      throw Exception("Empty response from OpenAI.");
     } catch (e) {
       throw Exception("Failed to fetch data from AI: $e");
     }
   }
-  /// Extracts underlined/highlighted words from an image using OpenAI Vision (GPT-4o).
+
+  /// Extracts underlined/highlighted words and exactly their surrounding sentences from an image.
   /// Uses raw HTTP to avoid dart_openai serialization issues with image URLs.
-  Future<List<String>> extractWordsFromImage(XFile imageFile) async {
+  Future<List<Map<String, String>>> extractWordsFromImage(XFile imageFile) async {
     try {
       final bytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(bytes);
 
       final url = Uri.parse('https://api.openai.com/v1/chat/completions');
-      
+
       final payload = {
         "model": "gpt-4o",
         "messages": [
           {
             "role": "system",
-            "content": "You are a helpful assistant that identifies specific vocabulary in images."
+            "content":
+                "You are a helpful assistant that identifies specific vocabulary in images.",
           },
           {
             "role": "user",
@@ -192,23 +308,30 @@ Returns: {"word": "...", "definition": "...", "meaning_tr": "...", "example": ".
               {
                 "type": "text",
                 "text": """
-                Identify English words in this image that are explicitly **underlined**, **highlighted**, or **encircled**.
-                Ignore general text, page titles, or instructions. Focus ONLY on the marked vocabulary.
-                Return a STRICT JSON object with a single key "words" containing the list of strings.
-                Example: {"words": ["mitigate", "ephemeral"]}
-                """
+                Identify ALL English words in this image that have been EXPLICITLY MARKED by the user. 
+                A word is "marked" if it is:
+                1. **Underlined** (a line drawn underneath it).
+                2. **Highlighted** (colored over with a marker).
+                3. **Encircled / Circled / Boxed** (a pen or pencil line drawn around the word, forming a circle, oval, or box).
+                
+                CRITICAL RULES:
+                - Do NOT miss any words that have a circle, oval, or box drawn around them! Scan the entire image carefully.
+                - Ignore general text, page titles, or instructions. Focus ONLY on the marked vocabulary.
+                - For each identified word, also extract the full sentence it appears in as "context".
+                - Return a STRICT JSON object with a single key "items" containing a list of objects.
+                - Each object must have "word" and "context" string keys.
+                Example: {"items": [{"word": "mitigate", "context": "We need to mitigate the risks."}, {"word": "ephemeral", "context": "The beauty of the flower is ephemeral."}]}
+                """,
               },
               {
                 "type": "image_url",
-                "image_url": {
-                  "url": "data:image/jpeg;base64,$base64Image"
-                }
-              }
-            ]
-          }
+                "image_url": {"url": "data:image/jpeg;base64,$base64Image"},
+              },
+            ],
+          },
         ],
         "response_format": {"type": "json_object"},
-        "temperature": 0.1
+        "temperature": 0.2,
       };
 
       final response = await http.post(
@@ -223,26 +346,30 @@ Returns: {"word": "...", "definition": "...", "meaning_tr": "...", "example": ".
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final content = data['choices'][0]['message']['content'];
-        
+
         if (content != null) {
-           dynamic decoded = jsonDecode(content);
-           
-           if (decoded is Map<String, dynamic> && decoded.containsKey('words')) {
-             return List<String>.from(decoded['words'].map((e) => e.toString()));
-           } else {
-             throw Exception("Unexpected JSON format from AI: $content");
-           }
+          dynamic decoded = jsonDecode(content);
+
+          if (decoded is Map<String, dynamic> && decoded.containsKey('items')) {
+            List items = decoded['items'];
+            return items.map((e) => {
+              "word": e["word"]?.toString() ?? "",
+              "context": e["context"]?.toString() ?? ""
+            }).toList();
+          } else {
+            throw Exception("Unexpected JSON format from AI: $content");
+          }
         }
       } else {
-        throw Exception("OpenAI API Error: ${response.statusCode} - ${response.body}");
+        throw Exception(
+          "OpenAI API Error: ${response.statusCode} - ${response.body}",
+        );
       }
 
       throw Exception("Empty response from AI");
-
     } catch (e) {
       print("OpenAI Vision Error: $e");
-      rethrow; 
+      rethrow;
     }
   }
 }
-

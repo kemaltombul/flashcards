@@ -33,9 +33,14 @@ class _AddCollectionDialogState extends State<AddCollectionDialog> {
     return AlertDialog(
       backgroundColor: _cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text("New Collection",
-          style: _textStyle.copyWith(
-              color: _accentColor, fontSize: 20, fontWeight: FontWeight.bold)),
+      title: Text(
+        "New Collection",
+        style: _textStyle.copyWith(
+          color: _accentColor,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -48,15 +53,18 @@ class _AddCollectionDialogState extends State<AddCollectionDialog> {
               filled: true,
               fillColor: Colors.black12,
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none),
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
             ),
           ),
           const SizedBox(height: 20),
           SwitchListTile(
             title: Text("Game Mode", style: _textStyle.copyWith(fontSize: 16)),
             subtitle: Text(
-              _isGameMode ? "Timer ON, Meaning Hidden" : "Timer OFF, Show Meaning",
+              _isGameMode
+                  ? "Timer ON, Meaning Hidden"
+                  : "Timer OFF, Show Meaning",
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
             value: _isGameMode,
@@ -71,15 +79,20 @@ class _AddCollectionDialogState extends State<AddCollectionDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("Cancel",
-                style: _textStyle.copyWith(color: Colors.grey.shade400))),
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            "Cancel",
+            style: _textStyle.copyWith(color: Colors.grey.shade400),
+          ),
+        ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10))),
+            backgroundColor: _accentColor,
+            foregroundColor: Colors.black,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
           onPressed: () async {
             if (_controller.text.isNotEmpty) {
               await _dbService.createCollection(_controller.text, _isGameMode);
@@ -88,8 +101,10 @@ class _AddCollectionDialogState extends State<AddCollectionDialog> {
               }
             }
           },
-          child: const Text("Create",
-              style: TextStyle(fontWeight: FontWeight.bold)),
+          child: const Text(
+            "Create",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       ],
     );

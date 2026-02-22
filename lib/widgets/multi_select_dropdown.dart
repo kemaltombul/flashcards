@@ -55,39 +55,51 @@ class _MultiSelectDropdownState extends State<MultiSelectDropdown> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.white12),
                 ),
-                child: widget.items.isEmpty 
-                  ? const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text("No items available", style: TextStyle(color: Colors.white54)),
-                    )
-                  : ListView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    itemCount: widget.items.length,
-                    itemBuilder: (context, index) {
-                      final item = widget.items[index];
-                      final isSelected = widget.selectedItems.contains(item);
-          
-                      return CheckboxListTile(
-                        title: Text(item, style: const TextStyle(color: Colors.white)),
-                        value: isSelected,
-                        activeColor: const Color(0xFFBB86FC),
-                        checkColor: Colors.black,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                        onChanged: (bool? checked) {
-                          List<String> newSelection = List.from(widget.selectedItems);
-                          if (checked == true) {
-                            newSelection.add(item);
-                          } else {
-                            newSelection.remove(item);
-                          }
-                          widget.onChanged(newSelection);
-                          _overlayEntry!.markNeedsBuild();
+                child: widget.items.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text(
+                          "No items available",
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: widget.items.length,
+                        itemBuilder: (context, index) {
+                          final item = widget.items[index];
+                          final isSelected = widget.selectedItems.contains(
+                            item,
+                          );
+
+                          return CheckboxListTile(
+                            title: Text(
+                              item,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            value: isSelected,
+                            activeColor: const Color(0xFFBB86FC),
+                            checkColor: Colors.black,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                            ),
+                            onChanged: (bool? checked) {
+                              List<String> newSelection = List.from(
+                                widget.selectedItems,
+                              );
+                              if (checked == true) {
+                                newSelection.add(item);
+                              } else {
+                                newSelection.remove(item);
+                              }
+                              widget.onChanged(newSelection);
+                              _overlayEntry!.markNeedsBuild();
+                            },
+                          );
                         },
-                      );
-                    },
-                  ),
+                      ),
               ),
             ),
           ),
@@ -144,8 +156,10 @@ class _MultiSelectDropdownState extends State<MultiSelectDropdown> {
                       ? widget.hint
                       : widget.selectedItems.join(", "),
                   style: TextStyle(
-                    fontSize: 16, 
-                    color: widget.selectedItems.isEmpty ? Colors.white38 : Colors.white
+                    fontSize: 16,
+                    color: widget.selectedItems.isEmpty
+                        ? Colors.white38
+                        : Colors.white,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),

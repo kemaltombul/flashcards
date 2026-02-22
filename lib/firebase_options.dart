@@ -85,5 +85,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'flashcards-2686d.firebasestorage.app',
     measurementId: 'G-N7PWL0KD4Z',
   );
-
 }

@@ -40,9 +40,14 @@ class _RenameCollectionDialogState extends State<RenameCollectionDialog> {
     return AlertDialog(
       backgroundColor: _cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text("Rename Collection",
-          style: _textStyle.copyWith(
-              color: _accentColor, fontSize: 20, fontWeight: FontWeight.bold)),
+      title: Text(
+        "Rename Collection",
+        style: _textStyle.copyWith(
+          color: _accentColor,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
       content: TextField(
         controller: _controller,
         style: const TextStyle(color: Colors.white),
@@ -52,32 +57,43 @@ class _RenameCollectionDialogState extends State<RenameCollectionDialog> {
           filled: true,
           fillColor: Colors.black12,
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
         ),
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("Cancel",
-                style: _textStyle.copyWith(color: Colors.grey.shade400))),
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            "Cancel",
+            style: _textStyle.copyWith(color: Colors.grey.shade400),
+          ),
+        ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10))),
+            backgroundColor: _accentColor,
+            foregroundColor: Colors.black,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
           onPressed: () async {
             if (_controller.text.isNotEmpty &&
                 _controller.text != widget.collection.name) {
               await _dbService.updateCollectionName(
-                  widget.collection.id!, _controller.text);
+                widget.collection.id!,
+                _controller.text,
+              );
               if (mounted) {
                 Navigator.pop(context);
               }
             }
           },
-          child: const Text("Save", style: TextStyle(fontWeight: FontWeight.bold)),
+          child: const Text(
+            "Save",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       ],
     );

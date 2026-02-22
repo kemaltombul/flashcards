@@ -8,11 +8,14 @@ class CollectionSelector extends StatefulWidget {
   final String? label;
 
   const CollectionSelector({
-    super.key, 
-    required this.selectedId, 
+    super.key,
+    required this.selectedId,
     required this.onChanged,
     this.label = "Select Collection",
+    this.isDense = false,
   });
+
+  final bool isDense;
 
   @override
   State<CollectionSelector> createState() => _CollectionSelectorState();
@@ -51,9 +54,9 @@ class _CollectionSelectorState extends State<CollectionSelector> {
             child: StreamBuilder<List<Collection>>(
               stream: _dbService.getCollectionsStream(),
               builder: (context, snapshot) {
-                 final collections = snapshot.data ?? [];
-                 
-                 return TapRegion(
+                final collections = snapshot.data ?? [];
+
+                return TapRegion(
                   onTapOutside: (_) => _closeDropdown(),
                   child: Container(
                     constraints: const BoxConstraints(maxHeight: 250),
@@ -61,55 +64,73 @@ class _CollectionSelectorState extends State<CollectionSelector> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.white12),
                     ),
-                    child: collections.isEmpty 
-                      ? const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text("No collections available.", style: TextStyle(color: Colors.white54)),
-                        )
-                      : ListView.builder(
-                        padding: EdgeInsets.zero,
-                        shrinkWrap: true,
-                        itemCount: collections.length,
-                        itemBuilder: (context, index) {
-                          final col = collections[index];
-                          final isSelected = col.id == widget.selectedId;
-                          
-                          return InkWell(
-                            onTap: () {
-                              widget.onChanged(col.id);
-                              _closeDropdown();
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    col.isGame ? Icons.videogame_asset : Icons.book, 
-                                    size: 18, 
-                                    color: isSelected ? const Color(0xFFBB86FC) : Colors.grey
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      col.name, 
-                                      style: TextStyle(
-                                        color: isSelected ? Colors.white : Colors.white70,
-                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      ),
-                                      overflow: TextOverflow.ellipsis
-                                    ),
-                                  ),
-                                  if (isSelected)
-                                    const Icon(Icons.check, color: Color(0xFFBB86FC), size: 18),
-                                ],
-                              ),
+                    child: collections.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text(
+                              "No collections available.",
+                              style: TextStyle(color: Colors.white54),
                             ),
-                          );
-                        },
-                      ),
+                          )
+                        : ListView.builder(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: collections.length,
+                            itemBuilder: (context, index) {
+                              final col = collections[index];
+                              final isSelected = col.id == widget.selectedId;
+
+                              return InkWell(
+                                onTap: () {
+                                  widget.onChanged(col.id);
+                                  _closeDropdown();
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        col.isGame
+                                            ? Icons.videogame_asset
+                                            : Icons.book,
+                                        size: 18,
+                                        color: isSelected
+                                            ? const Color(0xFFBB86FC)
+                                            : Colors.grey,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          col.name,
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Colors.white70,
+                                            fontWeight: isSelected
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Icon(
+                                          Icons.check,
+                                          color: Color(0xFFBB86FC),
+                                          size: 18,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 );
-              }
+              },
             ),
           ),
         ),
@@ -124,13 +145,13 @@ class _CollectionSelectorState extends State<CollectionSelector> {
     _overlayEntry?.remove();
     setState(() => _isDropdownOpen = false);
   }
-  
+
   @override
   void didUpdateWidget(covariant CollectionSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
-     // If external selection changed, we might want to close dropdown or update UI, 
-     // but since UI is rebuilt on build(), usually fine.
-     // However, ensure overlay matches size if layout changes (rare here)
+    // If external selection changed, we might want to close dropdown or update UI,
+    // but since UI is rebuilt on build(), usually fine.
+    // However, ensure overlay matches size if layout changes (rare here)
   }
 
   @override
@@ -147,39 +168,49 @@ class _CollectionSelectorState extends State<CollectionSelector> {
       stream: _dbService.getCollectionsStream(),
       builder: (context, snapshot) {
         final collections = snapshot.data ?? [];
-        
+
         // Ensure selected ID is valid logic (kept from previous implementation)
         String? validSelectedId = widget.selectedId;
         String displayLabel = widget.label ?? "Select Collection";
-        
+
         if (collections.isNotEmpty) {
-           // Auto-select first logic
-           if (validSelectedId == null || !collections.any((c) => c.id == validSelectedId)) {
-             validSelectedId = collections.first.id;
-             WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (widget.selectedId != validSelectedId && mounted) {
-                  widget.onChanged(validSelectedId);
-                }
-             });
-           } else {
-             // Find name for display
-             final selectedCol = collections.firstWhere((c) => c.id == validSelectedId);
-             displayLabel = selectedCol.name;
-           }
+          // Auto-select first logic
+          if (validSelectedId == null ||
+              !collections.any((c) => c.id == validSelectedId)) {
+            validSelectedId = collections.first.id;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (widget.selectedId != validSelectedId && mounted) {
+                widget.onChanged(validSelectedId);
+              }
+            });
+          } else {
+            // Find name for display
+            final selectedCol = collections.firstWhere(
+              (c) => c.id == validSelectedId,
+            );
+            displayLabel = selectedCol.name;
+          }
         } else {
           displayLabel = "No Collections";
         }
-        
+
         return CompositedTransformTarget(
           link: _layerLink,
           child: GestureDetector(
             onTap: collections.isEmpty ? null : _toggleDropdown,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: widget.isDense
+                  ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
+                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
-                color: Colors.black12,
+                color: Colors
+                    .transparent, // Let parent handle color or use isDense for transparent
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
+                border: widget.isDense
+                    ? null
+                    : Border.all(
+                        color: Colors.white12,
+                      ), // Remove border if dense (handled by parent)
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -188,14 +219,18 @@ class _CollectionSelectorState extends State<CollectionSelector> {
                     child: Text(
                       displayLabel,
                       style: TextStyle(
-                        fontSize: 16, 
-                        color: (validSelectedId == null) ? Colors.white38 : Colors.white
+                        fontSize: 16,
+                        color: (validSelectedId == null)
+                            ? Colors.white38
+                            : Colors.white,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Icon(
-                    _isDropdownOpen ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                    _isDropdownOpen
+                        ? Icons.arrow_drop_up
+                        : Icons.arrow_drop_down,
                     color: Colors.white70,
                   ),
                 ],
@@ -203,7 +238,7 @@ class _CollectionSelectorState extends State<CollectionSelector> {
             ),
           ),
         );
-      }
+      },
     );
   }
 }

@@ -1,18 +1,16 @@
-import 'dart:convert';
 import 'dart:async';
-
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
+import '../services/ai_service.dart';
 import '../models/word.dart';
 import '../widgets/collection_selector.dart';
-
-import '../services/ai_service.dart';
+import '../widgets/zen_input_field.dart';
+import '../widgets/expandable_section.dart';
 import '../dialogs/scan_dialog.dart';
+import '../constants/app_theme.dart';
+import '../utils/snackbar_helper.dart';
 
-
-enum AddMode { manual, smart, json }
-
-/// Page for adding a new word to a specific collection.
 class AddWordPage extends StatefulWidget {
   final String? collectionId;
   const AddWordPage({super.key, this.collectionId});
@@ -21,30 +19,28 @@ class AddWordPage extends StatefulWidget {
   State<AddWordPage> createState() => _AddWordPageState();
 }
 
-class _AddWordPageState extends State<AddWordPage> with AutomaticKeepAliveClientMixin {
-  AddMode _currentMode = AddMode.smart;
-  bool _isLoading = false;
-  // List<Collection> _collections = []; // Removed in favor of StreamBuilder
-  String? _selectedCollectionId;
-  
+class _AddWordPageState extends State<AddWordPage>
+    with AutomaticKeepAliveClientMixin {
+  // Logic
+  final FirestoreService _dbService = FirestoreService();
+  final AIService _aiService = AIService();
 
-  
-  final _formKey = GlobalKey<FormState>();
-  
   final _wordController = TextEditingController();
+  final _contextController = TextEditingController(); // New context input
   final _defController = TextEditingController();
   final _trController = TextEditingController();
   final _exController = TextEditingController();
-  final _jsonController = TextEditingController(); // For JSON Paste
-  
-  // Focus Nodes
+
   final _wordFocus = FocusNode();
+  final _contextFocus = FocusNode(); // Focus for context input
   final _defFocus = FocusNode();
-  final _trFocus = FocusNode();
-  final _exFocus = FocusNode();
-  
-  final FirestoreService _dbService = FirestoreService();
-  final AIService _aiService = AIService();
+
+  String? _selectedCollectionId;
+  bool _isLoading = false;
+  bool _showSecondaryFields = false;
+  bool _showOptionalFields = false;
+
+  // Mock Data
 
   @override
   bool get wantKeepAlive => true;
@@ -52,751 +48,394 @@ class _AddWordPageState extends State<AddWordPage> with AutomaticKeepAliveClient
   @override
   void initState() {
     super.initState();
+
     if (widget.collectionId != null) {
-      _selectedCollectionId = widget.collectionId!;
+      _selectedCollectionId = widget.collectionId;
     }
-    // _loadCollections(); // Removed
+
+    // Auto-show secondary fields if word is typed (simple heuristic)
+    _wordController.addListener(() {
+      if (_wordController.text.isNotEmpty && !_showSecondaryFields) {
+        setState(() => _showSecondaryFields = true);
+      }
+    });
   }
 
   @override
   void dispose() {
     _wordController.dispose();
+    _contextController.dispose();
     _defController.dispose();
     _trController.dispose();
     _exController.dispose();
-    _jsonController.dispose();
     _wordFocus.dispose();
+    _contextFocus.dispose();
     _defFocus.dispose();
-    _trFocus.dispose();
-    _exFocus.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
-
-
-    Widget content = Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-        padding: const EdgeInsets.all(25.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Custom Header
-            Padding(
-              padding: const EdgeInsets.only(bottom: 20.0),
-              child: Row(
-                children: [
-                  if (widget.collectionId != null) ...[
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new, size: 22, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                    const SizedBox(width: 15),
-                  ],
-                  const Text("Add Word", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
-                ],
-              ),
-            ),
-            const Text(
-              "Learn a new word!",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-            ),
-            const SizedBox(height: 5),
-            const Text("Choose input method below.", style: TextStyle(color: Colors.grey)),
-            const SizedBox(height: 20),
-
-            // Mode Selector
-            _buildModeSelector(),
-            const SizedBox(height: 30),
-
-            // Content Switching
-            if (_currentMode == AddMode.manual) _buildManualMode(),
-            if (_currentMode == AddMode.smart) _buildSmartMode(),
-            if (_currentMode == AddMode.json) _buildJsonMode(),
-          ],
-        ),
-      ),
-    ),
-    );
-
-    // Constrain layout for Web/Desktop
-    return content;
-  }
-
-  // --- Widgets ---
-
-  Widget _buildModeSelector() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2C2C2C),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white10),
-      ),
-      padding: const EdgeInsets.all(5),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _buildModeButton(AddMode.smart, "Smart AI", Icons.auto_awesome),
-          const SizedBox(width: 5),
-          _buildModeButton(AddMode.json, "JSON", Icons.data_object),
-          const SizedBox(width: 5),
-          _buildModeButton(AddMode.manual, "Manual", Icons.edit_note),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModeButton(AddMode mode, String label, IconData icon) {
-    bool isSelected = _currentMode == mode;
-    return Expanded(
-      flex: isSelected ? 3 : 1, // Expand selected
-      child: GestureDetector(
-        onTap: () => setState(() => _currentMode = mode),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.deepPurple : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: isSelected ? Colors.white : Colors.grey),
-              if (isSelected) ...[
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildManualMode() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          _buildModernTextField(
-            controller: _wordController,
-            label: "English Word",
-            icon: Icons.translate,
-            focusNode: _wordFocus,
-            nextFocus: _defFocus,
-            validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a word' : null,
-            suffix: Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: IconButton(
-                icon: const Icon(Icons.camera_alt_rounded, color: Colors.deepPurpleAccent, size: 22),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => ScanDialog(preselectedCollectionId: _selectedCollectionId),
-                  );
-                },
-                tooltip: "Scan from Image",
-                splashRadius: 20, 
-              ),
-            ),
-          ),
-          const SizedBox(height: 15),
-          _buildModernTextField(
-            controller: _defController,
-            label: "English Definition",
-            icon: Icons.menu_book,
-            focusNode: _defFocus,
-            nextFocus: _trFocus,
-            capitalization: TextCapitalization.sentences,
-          ),
-          const SizedBox(height: 15),
-          _buildModernTextField(
-            controller: _trController,
-            label: "Turkish Meaning",
-            icon: Icons.language,
-            focusNode: _trFocus,
-            nextFocus: _exFocus,
-            validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a meaning' : null,
-            capitalization: TextCapitalization.sentences,
-          ),
-          const SizedBox(height: 15),
-          _buildModernTextField(
-            controller: _exController,
-            label: "Example Sentence",
-            icon: Icons.format_quote_rounded,
-            maxLines: 2,
-            focusNode: _exFocus,
-            isLast: true,
-            capitalization: TextCapitalization.sentences,
-            onSubmitted: (_) => _saveWord(),
-          ),
-          const SizedBox(height: 20),
-          _buildCollectionSelector(),
-          const SizedBox(height: 30),
-          SizedBox(
-            width: double.infinity,
-            height: 55,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                elevation: 4,
-              ),
-              onPressed: _isLoading ? null : _saveWord,
-              child: _isLoading 
-                ? const CircularProgressIndicator(color: Colors.white)
-                : const Text("SAVE", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSmartMode() {
-    return Column(
-      children: [
-        const Text(
-          "Let AI do the work!",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber),
-        ),
-        const SizedBox(height: 5),
-        const Text(
-          "Enter a word, and we'll fill in the definition, meaning, and example.",
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey, fontSize: 13),
-        ),
-        const SizedBox(height: 25),
-        _buildModernTextField(
-          controller: _wordController,
-          label: "English Word",
-          icon: Icons.auto_awesome,
-          focusNode: _wordFocus,
-          nextFocus: _defFocus,
-          validator: (v) => v == null || v.trim().isEmpty ? 'Enter a word for AI' : null,
-          suffix: Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: IconButton(
-              icon: const Icon(Icons.camera_alt_rounded, color: Colors.deepPurpleAccent, size: 22),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => ScanDialog(preselectedCollectionId: _selectedCollectionId),
-                );
-              },
-              tooltip: "Scan from Image",
-              splashRadius: 20, 
-            ),
-          ),
-        ),
-        const SizedBox(height: 15),
-        _buildModernTextField(
-          controller: _defController,
-          label: "Optional Context/Definition",
-          icon: Icons.lightbulb_outline,
-          maxLines: 2,
-          focusNode: _defFocus,
-          isLast: true,
-          capitalization: TextCapitalization.sentences,
-          onSubmitted: (_) => _smartAddWord(),
-        ),
-         const SizedBox(height: 20),
-        _buildCollectionSelector(),
-         const SizedBox(height: 30),
-
-        SizedBox(
-          width: double.infinity,
-          height: 55,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2C2C2C),
-              foregroundColor: Colors.amber, 
-              side: const BorderSide(color: Colors.amber),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            ),
-            onPressed: _isLoading ? null : _smartAddWord,
-            icon: _isLoading 
-              ? Container(width: 24, height: 24, padding: const EdgeInsets.all(2), child: const CircularProgressIndicator(color: Colors.amber, strokeWidth: 2)) 
-              : const Icon(Icons.auto_awesome),
-            label: Text(_isLoading ? "GENERATING..." : "SMART ADD", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showPreviewBottomSheet(Word word) {
-    ValueNotifier<double> progressNotifier = ValueNotifier(0.0);
-    Timer? localTimer;
-    bool isCancelled = false;
-
-    // Start Timer
-    const duration = Duration(milliseconds: 50);
-    const totalSteps = 160; // 8 seconds / 50ms
-    int currentStep = 0;
-
-    localTimer = Timer.periodic(duration, (timer) {
-      if (isCancelled) {
-        timer.cancel();
-        return;
-      }
-      currentStep++;
-      progressNotifier.value = currentStep / totalSteps;
-
-      if (currentStep >= totalSteps) {
-        timer.cancel();
-        Navigator.pop(context); // Close sheet
-        _savePreview(word);     // Save
-      }
-    });
-
-    void cancelAutoSave() {
-      if (!isCancelled) {
-        isCancelled = true;
-        localTimer?.cancel();
-        progressNotifier.value = -1.0; // Signal cancellation
-      }
-    }
-
-    // Controller for programmatic expansion
-    final DraggableScrollableController sheetController = DraggableScrollableController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent, 
-      builder: (context) {
-        return NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if (notification is ScrollUpdateNotification) {
-               cancelAutoSave();
-            }
-            return false;
-          },
-          child: DraggableScrollableSheet(
-            controller: sheetController,
-            initialChildSize: 0.25, 
-            minChildSize: 0.25,
-            maxChildSize: 0.7,
-            snap: true, // Snap between min and max
-            builder: (context, scrollController) {
-              return Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1E1E1E),
-                   borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-                ),
-                child: SingleChildScrollView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 50, height: 5,
-                          margin: const EdgeInsets.symmetric(vertical: 15),
-                          decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(10)),
-                        )
-                      ),
-
-                      // Animated Progress Bar
-                      ValueListenableBuilder<double>(
-                        valueListenable: progressNotifier,
-                        builder: (context, value, child) {
-                          if (value < 0) {
-                             return const Padding(
-                              padding: EdgeInsets.only(bottom: 15),
-                              child: Center(child: Text("Auto-save cancelled", style: TextStyle(color: Colors.grey, fontSize: 11))),
-                            );
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 15),
-                            child: LinearProgressIndicator(
-                              value: value,
-                              backgroundColor: Colors.white10,
-                              color: Colors.amber,
-                              minHeight: 4,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          );
-                        },
-                      ),
-
-                      // Always Visible Part
-                      Text(word.word, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 5),
-                      Text(word.meaningTr, style: const TextStyle(fontSize: 22, color: Colors.deepPurpleAccent, fontStyle: FontStyle.italic)),
-                      
-                      const SizedBox(height: 25),
-                      const Divider(color: Colors.white12),
-                      
-                      // Tap to Expand Area
-                      GestureDetector(
-                        onTap: () {
-                          cancelAutoSave();
-                          sheetController.animateTo(
-                            0.7, 
-                            duration: const Duration(milliseconds: 300), 
-                            curve: Curves.easeOut
-                          );
-                        },
-                        behavior: HitTestBehavior.opaque, // Catch taps
-                        child: ValueListenableBuilder<double>(
-                          valueListenable: progressNotifier,
-                          builder: (c, v, _) {
-                              final remaining = (8 - (v * 8)).ceil();
-                              return Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                child: Center(
-                                    child: Text(v >= 0 ? "Saving in ${remaining}s... Tap to Expand" : "Swipe or Tap for details", 
-                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12))
-                                ),
-                              );
-                          }
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 10),
-
-                      // Hidden/Expandable Part
-                      _buildPreviewRow(Icons.menu_book, "Definition", word.definition),
-                      const SizedBox(height: 20),
-                      _buildPreviewRow(Icons.format_quote_rounded, "Example", word.example),
-                      
-                      const SizedBox(height: 35),
-                      
-                       Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: const BorderSide(color: Colors.white24),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              onPressed: () {
-                                cancelAutoSave();
-                                Navigator.pop(context); 
-                                _editPreview(word);
-                              },
-                              icon: const Icon(Icons.edit, size: 20),
-                              label: const Text("EDIT"),
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.deepPurple,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              onPressed: () async {
-                                 cancelAutoSave();
-                                 Navigator.pop(context);
-                                 await _savePreview(word);
-                              },
-                              icon: const Icon(Icons.check_circle, size: 22),
-                              label: const Text("SAVE NOW"),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 40),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    ).whenComplete(() {
-      cancelAutoSave();
-    });
-  }
-
-  Widget _buildPreviewRow(IconData icon, String title, String content) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [Icon(icon, size: 16, color: Colors.grey), const SizedBox(width: 5), Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600))]),
-        const SizedBox(height: 6),
-        Text(content, style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.4)),
-      ],
-    );
-  }
-
-
-
-  Widget _buildJsonMode() {
-    return Column(
-      children: [
-        const Text(
-          "Bulk Import (JSON)",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          "Paste a JSON array of words below.",
-          style: TextStyle(color: Colors.grey, fontSize: 12),
-        ),
-        const SizedBox(height: 10),
-        _buildModernTextField(
-          controller: _jsonController, 
-          label: "Paste JSON Here", 
-          icon: Icons.data_array, 
-          minLines: 3,
-          maxLines: 10,
-        ),
-        const SizedBox(height: 20),
-        _buildCollectionSelector(),
-        const SizedBox(height: 15),
-        SizedBox(
-          width: double.infinity,
-          height: 55,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2C2C2C),
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.deepPurple),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            ),
-            onPressed: _importJson,
-            icon: const Icon(Icons.download),
-            label: const Text("IMPORT JSON", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildModernTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    int maxLines = 1,
-    int? minLines,
-    FocusNode? focusNode,
-    FocusNode? nextFocus,
-    bool isLast = false,
-    String? Function(String?)? validator,
-    TextCapitalization capitalization = TextCapitalization.none,
-    void Function(String)? onSubmitted,
-    Widget? suffix,
-  }) {
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      maxLines: maxLines,
-      minLines: minLines,
-      style: const TextStyle(color: Colors.white),
-      textCapitalization: capitalization,
-      textInputAction: isLast ? TextInputAction.done : (maxLines > 1 ? TextInputAction.newline : TextInputAction.next),
-      validator: validator,
-      onFieldSubmitted: (val) {
-        if (onSubmitted != null) {
-          onSubmitted(val);
-        } else if (nextFocus != null) {
-          FocusScope.of(context).requestFocus(nextFocus);
-        }
-      },
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: Colors.grey.shade400),
-        prefixIcon: Icon(icon, color: Colors.deepPurpleAccent),
-        suffixIcon: suffix,
-        filled: true,
-        fillColor: const Color(0xFF2C2C2C),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: Colors.white10),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Colors.deepPurpleAccent, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: Colors.red.shade300),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCollectionSelector() {
-    return CollectionSelector(
-      selectedId: _selectedCollectionId,
-      onChanged: (val) {
-        setState(() => _selectedCollectionId = val);
-      },
-    );
-  }
-
-  // --- Mode Actions ---
-
-  Future<void> _saveWord() async {
+  void _generateAI() async {
+    if (_wordController.text.trim().isEmpty) return;
     if (_selectedCollectionId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a collection!"), backgroundColor: Colors.orange));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Select a collection first!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true); // Visualize loading
-      try {
-        await _dbService.insertWord(Word(
+    setState(() => _isLoading = true);
+    try {
+      final data = await _aiService.generateSmartWord(
+        _wordController.text,
+        _contextController.text, // Use dedicated context input
+        _selectedCollectionId!,
+      );
+      final word = Word.fromMap(data);
+
+      setState(() {
+        _defController.text = word.definition;
+        _trController.text = word.meaningTr;
+        _exController.text = word.example;
+        _showSecondaryFields = true;
+      });
+    } catch (e) {
+      SnackbarHelper.showError(context, "AI Error: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveWord() async {
+    if (_wordController.text.isEmpty || _trController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Fill in at least Word and Meaning."),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (_selectedCollectionId == null) {
+      SnackbarHelper.showWarning(context, "Select a collection!");
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _dbService.insertWord(
+        Word(
           collectionId: _selectedCollectionId!,
           word: _wordController.text.trim(),
           definition: _defController.text.trim(),
           meaningTr: _trController.text.trim(),
-          example: _exController.text.trim().isEmpty ? "" : _exController.text.trim(),
-        ));
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Successfully Added!"), backgroundColor: Colors.green));
-          _clearFields();
-        }
-      } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _smartAddWord() async {
-    if (_wordController.text.trim().isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a word first!"), backgroundColor: Colors.orange));
-       return;
-    }
-
-    if (_selectedCollectionId == null) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a collection!"), backgroundColor: Colors.orange));
-       return;
-    }
-
-    setState(() => _isLoading = true);
-    FocusScope.of(context).unfocus(); 
-
-    try {
-      final Map<String, dynamic> aiData = await _aiService.generateSmartWord(
-        _wordController.text, 
-        _defController.text.isNotEmpty ? _defController.text : null,
-        _selectedCollectionId!
+          example: _exController.text.trim(),
+        ),
       );
 
       if (mounted) {
-        Word previewWord = Word.fromMap(aiData);
-        _showPreviewBottomSheet(previewWord);
+        SnackbarHelper.showSuccess(
+          context,
+          "Word Added! Keep the streak alive! 🔥",
+        );
+        _clearForm();
       }
-
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("AI Error: $e"), backgroundColor: Colors.red));
-      }
+      SnackbarHelper.showError(context, "Error: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _savePreview(Word word) async {
-    try {
-      await _dbService.insertWord(word);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Successfully Added!"), backgroundColor: Colors.green));
-        _clearFields();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error Saving: $e"), backgroundColor: Colors.red));
-      }
-    }
-  }
-
-  void _editPreview(Word word) {
-    // Switch to Manual Mode and populate fields
+  void _clearForm() {
     setState(() {
-      _wordController.text = word.word;
-      _defController.text = word.definition;
-      _trController.text = word.meaningTr;
-      _exController.text = word.example;
-      _currentMode = AddMode.manual;
+      _wordController.clear();
+      _contextController.clear();
+      _defController.clear();
+      _trController.clear();
+      _exController.clear();
+      _showSecondaryFields = false;
+      _wordFocus.requestFocus();
     });
   }
 
-  Future<void> _importJson() async {
-    String jsonString = _jsonController.text.trim();
-    if (jsonString.isEmpty) return;
-    
-    if (_selectedCollectionId == null) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a collection!"), backgroundColor: Colors.orange));
-       return;
-    }
+  @override
+  Widget build(BuildContext context) {
+    // Theme Colors
+    final accentColor = AppTheme.accentColor;
 
-    try {
-      if (!jsonString.startsWith('[') && !jsonString.endsWith(']')) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Invalid JSON: Must be a list [...]"), backgroundColor: Colors.red),
-        );
-        return;
-      }
+    return Scaffold(
+      resizeToAvoidBottomInset: false, // Prevent background squish
+      backgroundColor: Colors.transparent,
+      body: SizedBox(
+        height: MediaQuery.of(context).size.height,
+        width: MediaQuery.of(context).size.width,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 30,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
 
-      List<dynamic> data = jsonDecode(jsonString);
-      
-      var stats = await _dbService.importWordsWithDeduplication(_selectedCollectionId!, data);
-      
-      int imported = stats['inserted'] ?? 0;
-      int skipped = stats['skipped'] ?? 0;
+                // --- Collection Selector (Pill) ---
+                Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.folder_open_rounded,
+                          color: Colors.white70,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: CollectionSelector(
+                            selectedId: _selectedCollectionId,
+                            onChanged: (val) =>
+                                setState(() => _selectedCollectionId = val),
+                            isDense: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
-      if (mounted) {
-        String message = "Imported $imported words.";
-        if (skipped > 0) {
-          message += " $skipped duplicates skipped.";
-        }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message), 
-            backgroundColor: imported > 0 ? Colors.green : Colors.orange
+                const SizedBox(height: 15),
+
+                // --- Camera Button ---
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (c) => ScanDialog(
+                          preselectedCollectionId: _selectedCollectionId,
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.camera_alt_outlined,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
+                    label: const Text(
+                      "Scan from Camera",
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 10,
+                      ),
+                      shape: const StadiumBorder(),
+                      side: BorderSide(color: Colors.white.withOpacity(0.15)),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 50),
+
+                // --- Hero Input ---
+                Center(
+                  child: Text(
+                    "STEP 1: ENTER WORD",
+                    style: TextStyle(
+                      color: accentColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    TextField(
+                      controller: _wordController,
+                      focusNode: _wordFocus,
+                      textAlign: TextAlign.center,
+                      textInputAction: TextInputAction.next, // Move to next field
+                      style: const TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: "Type a word...",
+                        hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.2),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 40,
+                        ),
+                      ),
+                      onSubmitted: (_) {
+                        FocusScope.of(context).requestFocus(_contextFocus);
+                      },
+                    ),
+                    if (_isLoading)
+                      const Positioned(
+                        right: 0,
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else if (_wordController.text.isNotEmpty && !_showSecondaryFields)
+                      Positioned(
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.auto_awesome,
+                            color: Colors.amber,
+                          ),
+                          onPressed: _generateAI,
+                          tooltip: "AI Magic Fill",
+                        ),
+                      ),
+                  ],
+                ),
+
+
+                const SizedBox(height: 40),
+
+                // --- Fluid Secondary Fields ---
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 500),
+                  opacity: _showSecondaryFields ? 1.0 : 0.0,
+                  child: Column(
+                    children: [
+                      if (_showSecondaryFields) ...[
+                        const SizedBox(height: 40),
+                        Center(
+                          child: Text(
+                            "STEP 2: CONTEXT (OPTIONAL)",
+                            style: TextStyle(
+                              color: accentColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        ZenInputField(
+                          controller: _contextController,
+                          hint: "meaning, definition, or example sentence...",
+                          icon: Icons.lightbulb_outline,
+                          focusNode: _contextFocus,
+                          onSubmitted: (_) => _generateAI(),
+                        ),
+                        const SizedBox(height: 15),
+                        
+                        // AI Button (Explicit)
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _isLoading ? null : _generateAI,
+                            icon: _isLoading 
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber))
+                                : const Icon(Icons.auto_awesome, color: Colors.amber),
+                            label: Text(_isLoading ? "Thinking..." : "Generate with AI", style: TextStyle(color: Colors.amber.shade200)),
+                            style: TextButton.styleFrom(
+                              backgroundColor: Colors.amber.withOpacity(0.1),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+
+                        // Optional Fields - Expandable Section
+                        ExpandableSection(
+                          isExpanded: _showOptionalFields,
+                          title: "Word Details (Meaning, Def, Example)",
+                          icon: Icons.edit_note,
+                          onToggle: () => setState(
+                            () => _showOptionalFields = !_showOptionalFields,
+                          ),
+                          child: Column(
+                            children: [
+                              ZenInputField(
+                                controller: _trController,
+                                hint: "Turkish Meaning",
+                                icon: Icons.translate,
+                              ),
+                              const SizedBox(height: 15),
+                              ZenInputField(
+                                controller: _defController,
+                                hint: "English Definition",
+                                icon: Icons.menu_book,
+                                focusNode: _defFocus,
+                              ),
+                              const SizedBox(height: 15),
+                              ZenInputField(
+                                controller: _exController,
+                                hint: "Example Sentence",
+                                icon: Icons.format_quote_rounded,
+                                maxLines: 2,
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 20),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 55,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: accentColor,
+                              foregroundColor: Colors.black,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            onPressed: _isLoading ? null : _saveWord,
+                            child: const Text(
+                              "Save Word",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-
-        if (imported > 0) {
-          _jsonController.clear();
-        }
-      }
-
-    } catch (e) {
-      if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("JSON Error: $e"), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  void _clearFields() {
-    _wordController.clear();
-    _defController.clear();
-    _trController.clear();
-    _exController.clear();
+        ),
+      ), // SizedBox
+    ); // Scaffold
   }
 }

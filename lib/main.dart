@@ -6,6 +6,7 @@ import 'package:english_flashcards/firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:english_flashcards/services/auth_service.dart';
 import 'screens/collections_page.dart';
+import 'screens/main_page.dart';
 import 'screens/login_page.dart';
 
 void main() async {
@@ -14,16 +15,14 @@ void main() async {
   await dotenv.load(fileName: ".env");
 
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // Enable OFFLINE persistence
-  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
 
   // Lock screen orientation to portrait
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   runApp(const VocabularyApp());
 }
@@ -40,7 +39,7 @@ class VocabularyApp extends StatelessWidget {
         // Zen Theme Colors
         primaryColor: const Color(0xFF0F0F0F), // Soft Black
         scaffoldBackgroundColor: const Color(0xFF0F0F0F),
-        cardColor: const Color(0xFF1E1E1E), 
+        cardColor: const Color(0xFF1E1E1E),
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFD0BCFF), // Soft Lavender
           brightness: Brightness.dark,
@@ -62,7 +61,7 @@ class VocabularyApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData) {
-            return const CollectionsPage(); // Direct to Collections
+            return const MainPage(); // Direct to Main Navigation
           }
           return const LoginPage();
         },

@@ -3,7 +3,7 @@ class TelemetryData {
   final String wordId;
   final String sessionId;
   final int timestamp;
-  
+
   // Interaction Metrics
   final int durationMs;
   final bool popupOpened;

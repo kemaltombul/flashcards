@@ -20,8 +20,12 @@ class FirestoreService {
     final uid = _userId;
     if (uid == null) throw Exception("User not logged in");
 
-    final docRef = _db.collection('users').doc(uid).collection('collections').doc();
-    
+    final docRef = _db
+        .collection('users')
+        .doc(uid)
+        .collection('collections')
+        .doc();
+
     final collection = Collection(
       id: docRef.id,
       name: name,
@@ -50,12 +54,12 @@ class FirestoreService {
         .orderBy('created_at', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id; // Ensure ID is set
-        return Collection.fromMap(data);
-      }).toList();
-    });
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id; // Ensure ID is set
+            return Collection.fromMap(data);
+          }).toList();
+        });
   }
 
   /// Get collections as Future (one-time fetch)
@@ -80,19 +84,34 @@ class FirestoreService {
   Future<void> updateCollectionName(String id, String newName) async {
     final uid = _userId;
     if (uid == null) return;
-    await _db.collection('users').doc(uid).collection('collections').doc(id).update({'name': newName});
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('collections')
+        .doc(id)
+        .update({'name': newName});
   }
 
   Future<void> updateCollectionMode(String id, bool isGame) async {
     final uid = _userId;
     if (uid == null) return;
-    await _db.collection('users').doc(uid).collection('collections').doc(id).update({'is_game': isGame ? 1 : 0});
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('collections')
+        .doc(id)
+        .update({'is_game': isGame ? 1 : 0});
   }
 
   Future<void> toggleFavorite(String id, bool currentStatus) async {
     final uid = _userId;
     if (uid == null) return;
-    await _db.collection('users').doc(uid).collection('collections').doc(id).update({'is_favorite': currentStatus ? 0 : 1});
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('collections')
+        .doc(id)
+        .update({'is_favorite': currentStatus ? 0 : 1});
   }
 
   Future<void> deleteCollection(String id) async {
@@ -100,10 +119,15 @@ class FirestoreService {
     if (uid == null) return;
 
     // 1. Delete the collection document
-    await _db.collection('users').doc(uid).collection('collections').doc(id).delete();
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('collections')
+        .doc(id)
+        .delete();
 
     // 2. Delete all words associated with this collection
-    // Note: This is a client-side batched delete. 
+    // Note: This is a client-side batched delete.
     // For large collections, cloud functions are better, but this is fine for now.
     final wordsQuery = await _db
         .collection('users')
@@ -128,8 +152,8 @@ class FirestoreService {
     if (uid == null) throw Exception("User not logged in");
 
     final docRef = _db.collection('users').doc(uid).collection('words').doc();
-    
-    // Create map and ensuring ID is null so we don't write it yet, 
+
+    // Create map and ensuring ID is null so we don't write it yet,
     // or better, write it if we want redundancy.
     final data = word.toMap();
     data.remove('id'); // ID is the document ID
@@ -142,7 +166,6 @@ class FirestoreService {
   Future<List<Word>> getWordsByCollection(String collectionId) async {
     final uid = _userId;
     if (uid == null) return [];
-
 
     try {
       // Try fetching from server first to get latest
@@ -159,27 +182,26 @@ class FirestoreService {
         return Word.fromMap(data);
       }).toList();
     } catch (e) {
-      // If server fails (offline), fall back to cache explicitly if needed, 
+      // If server fails (offline), fall back to cache explicitly if needed,
       // though serverAndCache handles this mostly.
       // But purely for robustness:
       if (e is FirebaseException && e.code == 'unavailable') {
-         final snapshot = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('words')
-          .where('collection_id', isEqualTo: collectionId)
-          .get(const GetOptions(source: Source.cache));
-          
-          return snapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return Word.fromMap(data);
-          }).toList();
+        final snapshot = await _db
+            .collection('users')
+            .doc(uid)
+            .collection('words')
+            .where('collection_id', isEqualTo: collectionId)
+            .get(const GetOptions(source: Source.cache));
+
+        return snapshot.docs.map((doc) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          return Word.fromMap(data);
+        }).toList();
       }
       rethrow;
     }
   }
-
 
   Future<int> getWordCount(String collectionId) async {
     final uid = _userId;
@@ -206,10 +228,15 @@ class FirestoreService {
     final uid = _userId;
     if (uid == null) return;
 
-    await _db.collection('users').doc(uid).collection('words').doc(wordId).update({
-      'view_count': FieldValue.increment(1),
-      'last_reviewed_at': DateTime.now().millisecondsSinceEpoch,
-    });
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('words')
+        .doc(wordId)
+        .update({
+          'view_count': FieldValue.increment(1),
+          'last_reviewed_at': DateTime.now().millisecondsSinceEpoch,
+        });
   }
 
   Future<void> addRatingToWord(String wordId, int rating, String logId) async {
@@ -222,9 +249,14 @@ class FirestoreService {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
 
-    await _db.collection('users').doc(uid).collection('words').doc(wordId).update({
-      'user_ratings': FieldValue.arrayUnion([ratingData]),
-    });
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('words')
+        .doc(wordId)
+        .update({
+          'user_ratings': FieldValue.arrayUnion([ratingData]),
+        });
   }
 
   // =======================================================================
@@ -279,13 +311,21 @@ class FirestoreService {
     // Convert to map and remove ID (it's the doc key)
     final data = word.toMap();
     data.remove('id');
-    
-    await _db.collection('users').doc(uid).collection('words').doc(word.id).update(data);
+
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('words')
+        .doc(word.id)
+        .update(data);
   }
 
   /// Basic client-side search because Firestore doesn't support substring search natively.
   /// For production, use Algolia/Typesense. For this scale, fetch all or collection-based fetch is okay.
-  Future<List<Word>> searchWords(String query, {List<String>? collectionIds}) async {
+  Future<List<Word>> searchWords(
+    String query, {
+    List<String>? collectionIds,
+  }) async {
     final uid = _userId;
     if (uid == null) return [];
 
@@ -302,7 +342,7 @@ class FirestoreService {
     }
 
     final snapshot = await queryRef.get();
-    
+
     final allWords = snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
       data['id'] = doc.id;
@@ -314,30 +354,35 @@ class FirestoreService {
     final lowerQ = query.toLowerCase();
     return allWords.where((w) {
       // Manual Filter for large collection lists if whereIn wasn't used
-      if (collectionIds != null && collectionIds.isNotEmpty && collectionIds.length > 10) {
+      if (collectionIds != null &&
+          collectionIds.isNotEmpty &&
+          collectionIds.length > 10) {
         if (!collectionIds.contains(w.collectionId)) return false;
       }
-      
-      return w.word.toLowerCase().contains(lowerQ) || 
-             w.meaningTr.toLowerCase().contains(lowerQ) ||
-             w.definition.toLowerCase().contains(lowerQ);
+
+      return w.word.toLowerCase().contains(lowerQ) ||
+          w.meaningTr.toLowerCase().contains(lowerQ) ||
+          w.definition.toLowerCase().contains(lowerQ);
     }).toList();
   }
 
-  Future<Map<String, int>> importWordsWithDeduplication(String collectionId, List<dynamic> jsonList) async {
+  Future<Map<String, int>> importWordsWithDeduplication(
+    String collectionId,
+    List<dynamic> jsonList,
+  ) async {
     final uid = _userId;
     if (uid == null) return {'inserted': 0, 'skipped': 0};
 
     int inserted = 0;
     int skipped = 0;
-    
+
     final batch = _db.batch();
     // Firestore allows max 500 writes per batch. For now assume list is small or we strictly commit every 500.
     // For simplicity, do one by one or small batches.
-    
+
     for (var item in jsonList) {
       if (item is! Map<String, dynamic>) continue;
-      
+
       String wordText = item['word'] ?? '';
       if (wordText.isEmpty) continue;
 
@@ -355,9 +400,9 @@ class FirestoreService {
         definition: item['definition'] ?? '',
         meaningTr: item['meaning_tr'] ?? '',
         example: item['example'] ?? '',
-        id: null // docRef.id
+        id: null, // docRef.id
       );
-      
+
       final data = word.toMap();
       data.remove('id');
       data['created_at'] = FieldValue.serverTimestamp();
@@ -376,14 +421,104 @@ class FirestoreService {
   Future<String?> logTelemetry(TelemetryData log) async {
     final uid = _userId;
     if (uid == null) return null;
-    
+
     // Logs are write-only usually, but let's store them
     final docRef = await _db
         .collection('users')
         .doc(uid)
         .collection('logs')
         .add(log.toMap());
-        
+
+    // Update streak when telemetry is logged (meaning user studied a card)
+    await updateUserStreak();
+
     return docRef.id;
+  }
+
+  // =======================================================================
+  // Streaks
+  // =======================================================================
+
+  Future<void> updateUserStreak() async {
+    final uid = _userId;
+    if (uid == null) return;
+
+    final userRef = _db.collection('users').doc(uid);
+    final now = DateTime.now();
+    // Normalize to midnight to easily compare days
+    final today = DateTime(now.year, now.month, now.day); 
+
+    await _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(userRef);
+
+      if (!snapshot.exists) {
+        transaction.set(userRef, {
+          'streak': 1,
+          'last_study_date': today.millisecondsSinceEpoch,
+        });
+        return;
+      }
+
+      final data = snapshot.data();
+      if (data == null) return;
+
+      int currentStreak = data['streak'] ?? 0;
+      int? lastStudyTimestamp = data['last_study_date'];
+
+      if (lastStudyTimestamp == null) {
+        transaction.update(userRef, {
+          'streak': 1,
+          'last_study_date': today.millisecondsSinceEpoch,
+        });
+        return;
+      }
+
+      final lastStudyDate = DateTime.fromMillisecondsSinceEpoch(lastStudyTimestamp);
+      final normalizedLastStudy = DateTime(lastStudyDate.year, lastStudyDate.month, lastStudyDate.day);
+
+      final difference = today.difference(normalizedLastStudy).inDays;
+
+      if (difference == 1) {
+        // Studied yesterday, increment streak
+        transaction.update(userRef, {
+          'streak': currentStreak + 1,
+          'last_study_date': today.millisecondsSinceEpoch,
+        });
+      } else if (difference > 1) {
+        // Streak broken
+        transaction.update(userRef, {
+          'streak': 1,
+          'last_study_date': today.millisecondsSinceEpoch,
+        });
+      }
+      // If difference == 0, already studied today, do nothing.
+    });
+  }
+
+  Stream<int> getUserStreakStream() {
+    final uid = _userId;
+    if (uid == null) return Stream.value(0);
+
+    return _db.collection('users').doc(uid).snapshots().map((snapshot) {
+      if (!snapshot.exists || snapshot.data() == null) return 0;
+      
+      final data = snapshot.data()!;
+      int streak = data['streak'] ?? 0;
+      int? lastStudyTimestamp = data['last_study_date'];
+      
+      if (lastStudyTimestamp != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final lastStudyDate = DateTime.fromMillisecondsSinceEpoch(lastStudyTimestamp);
+        final normalizedLastStudy = DateTime(lastStudyDate.year, lastStudyDate.month, lastStudyDate.day);
+        
+        // If they missed yesterday and today, their streak in UI should show as reset
+        if (today.difference(normalizedLastStudy).inDays > 1) {
+          return 0;
+        }
+      }
+      
+      return streak;
+    });
   }
 }

@@ -8,7 +8,8 @@ class Word {
   final String example;
   final int viewCount;
   final int? lastReviewedAt; // Milliseconds timestamp
-  final List<Map<String, dynamic>> userRatings; // List of {rating, log_id, timestamp}
+  final List<Map<String, dynamic>>
+  userRatings; // List of {rating, log_id, timestamp}
 
   Word({
     this.id,
