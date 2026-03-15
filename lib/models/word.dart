@@ -1,55 +1,62 @@
-/// Represents a vocabulary word with its definition, Turkish meaning, and example.
+/// SÖZLÜK ÖĞESİ / İÇERİK (Word)
+/// 
+/// Sadece "Kelimenin ne olduğu" ve "Anlamının ne olduğu" bilgisini tutar.
+/// Başlık (Collection) altındaki sayfalardır. Herkesin okuyabileceği "Ortak Soru Bankası" 
+/// mantığıyla çalıştığı için, içinde KİŞİSEL öğrenme verileri (telemetri) KESİNLİKLE BULUNMAZ.
+/// 
+/// Bir kullanıcının bu kelimeyi kaç kere gördüğü veya zorlanıp zorlanmadığı
+/// `WordTelemetry` modelinde ve `users/{uid}/word_stats` altında tutulur.
 class Word {
-  final String? id;
-  final String collectionId;
-  final String word;
-  final String definition;
-  final String meaningTr;
-  final String example;
-  final int viewCount;
-  final int? lastReviewedAt; // Milliseconds timestamp
-  final List<Map<String, dynamic>>
-  userRatings; // List of {rating, log_id, timestamp}
+  /// Firestore doküman ID'si
+  final String? id; 
+  
+  /// Hangi Bilgi Panosunun (Collection) altında duruyor?
+  final String collectionId; 
+  
+  /// Flashcard'ın Ön Yüzü (İngilizce Kelime)
+  final String word; 
+  
+  /// Flashcard'ın Arka Yüzü: İngilizce Açıklama
+  final String definition; 
+  
+  /// Flashcard'ın Arka Yüzü: Hedef Dildeki Çevirisi (Örn: Türkçe Anlamı)
+  /// Not: İleride farklı dillere genişleyebilmek için 'meaningTr' yerine 'translation' kullanıldı.
+  final String translation; 
+  
+  /// Flashcard'ın Arka Yüzü: Kullanıcının Seçimine Göre Değişen Ekstra Bilgi
+  /// İleride bu alan örnek cümle (Example), eş anlamlı kelimeler (Synonyms) 
+  /// veya başka bir metinsel içerik olarak özelleştirilebilecek.
+  final String contextualInfo; 
 
   Word({
     this.id,
     required this.collectionId,
     required this.word,
     required this.definition,
-    required this.meaningTr,
-    required this.example,
-    this.viewCount = 0,
-    this.lastReviewedAt,
-    this.userRatings = const [],
+    required this.translation,
+    required this.contextualInfo,
   });
 
   /// Converts the Word object to a Map for database storage.
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'collection_id': collectionId,
       'word': word,
       'definition': definition,
-      'meaning_tr': meaningTr,
-      'example': example,
-      'view_count': viewCount,
-      'last_reviewed_at': lastReviewedAt,
-      'user_ratings': userRatings,
+      'translation': translation,
+      'contextual_info': contextualInfo,
     };
   }
 
   /// Creates a Word object from a Map (e.g., from database query).
-  factory Word.fromMap(Map<String, dynamic> map) {
+  factory Word.fromMap(Map<String, dynamic> map, String docId) {
     return Word(
-      id: map['id']?.toString(), // Ensure String
+      id: docId,
       collectionId: map['collection_id']?.toString() ?? '', // Ensure String
-      word: map['word'],
-      definition: map['definition'],
-      meaningTr: map['meaning_tr'] ?? '',
-      example: map['example'] ?? '',
-      viewCount: map['view_count'] ?? 0,
-      lastReviewedAt: map['last_reviewed_at'],
-      userRatings: List<Map<String, dynamic>>.from(map['user_ratings'] ?? []),
+      word: map['word'] ?? '',
+      definition: map['definition'] ?? '',
+      translation: map['translation'] ?? '',
+      contextualInfo: map['contextual_info'] ?? '',
     );
   }
 
@@ -59,22 +66,16 @@ class Word {
     String? collectionId,
     String? word,
     String? definition,
-    String? meaningTr,
-    String? example,
-    int? viewCount,
-    int? lastReviewedAt,
-    List<Map<String, dynamic>>? userRatings,
+    String? translation,
+    String? contextualInfo,
   }) {
     return Word(
       id: id ?? this.id,
       collectionId: collectionId ?? this.collectionId,
       word: word ?? this.word,
       definition: definition ?? this.definition,
-      meaningTr: meaningTr ?? this.meaningTr,
-      example: example ?? this.example,
-      viewCount: viewCount ?? this.viewCount,
-      lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
-      userRatings: userRatings ?? this.userRatings,
+      translation: translation ?? this.translation,
+      contextualInfo: contextualInfo ?? this.contextualInfo,
     );
   }
 }

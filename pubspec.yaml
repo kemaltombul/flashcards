@@ -28,6 +28,7 @@ dependencies:
   dart_openai: ^6.0.0
   flutter_dotenv: ^6.0.0
   image_picker: ^1.2.1
+  rxdart: ^0.28.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

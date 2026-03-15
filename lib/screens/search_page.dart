@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:rxdart/rxdart.dart';
 import '../services/firestore_service.dart';
 import '../models/word.dart';
 import '../models/collection.dart';
+import '../models/user_profile.dart';
 import '../widgets/multi_select_dropdown.dart';
-import '../widgets/expandable_section.dart';
-import '../constants/app_theme.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -19,15 +19,25 @@ class _SearchPageState extends State<SearchPage>
   final FirestoreService _dbService = FirestoreService();
   final TextEditingController _searchController = TextEditingController();
   List<Word> _searchResults = [];
-  // List<Collection> _collections = []; // Removed for StreamBuilder
-  List<String> _selectedCollectionIds = []; // Empty means "All Collections"
+  List<String> _selectedCollectionIds = []; // Empty means "All accessible collections"
+  
+  // Kullanıcının erişebildiği tüm koleksiyonlar (editable + subscribed) — ID cache ve filtre için
+  List<Collection> _accessibleCollections = [];
+  List<String> _accessibleCollectionIds = [];
+  
+  // Kullanıcının düzenleyebildiği koleksiyon ID'leri (owned + editor) — buton görünürlüğü için
+  Set<String> _editableCollectionIds = {};
+  
+  StreamSubscription<List<Collection>>? _accessibleCollectionsSub;
+  StreamSubscription<List<Collection>>? _editableIdsSub;
   bool _isLoading = false;
-  bool _showFilter = false;
   Timer? _debounce;
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _accessibleCollectionsSub?.cancel();
+    _editableIdsSub?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -38,8 +48,49 @@ class _SearchPageState extends State<SearchPage>
   @override
   void initState() {
     super.initState();
-    // _loadCollections(); // Removed
-    _performSearch(); // Load all words by default
+    _subscribeToAccessibleCollections();
+    _subscribeToEditableIds();
+  }
+
+  void _subscribeToAccessibleCollections() {
+    final userProfileStream = _dbService.getUserProfileStream().asBroadcastStream();
+
+    final Stream<List<Collection>> stream = userProfileStream.switchMap((UserProfile? profile) {
+      final editableStream = _dbService.getEditableCollectionsStream();
+
+      if (profile != null && profile.subscribedCollections.isNotEmpty) {
+        final subStream = _dbService.getSubscribedCollectionsStream(profile);
+        return Rx.combineLatest2(
+          editableStream,
+          subStream,
+          (List<Collection> editable, List<Collection> subs) {
+            final combined = <String, Collection>{};
+            for (var c in editable) combined[c.id!] = c;
+            for (var c in subs) combined[c.id!] = c;
+            return combined.values.toList();
+          },
+        );
+      }
+      return editableStream;
+    });
+
+    _accessibleCollectionsSub = stream.listen((collections) {
+      setState(() {
+        _accessibleCollections = collections;
+        _accessibleCollectionIds = collections.map((c) => c.id!).toList();
+      });
+      _performSearch();
+    });
+  }
+
+  void _subscribeToEditableIds() {
+    _editableIdsSub = _dbService.getEditableCollectionsStream().listen((collections) {
+      if (mounted) {
+        setState(() {
+          _editableCollectionIds = collections.map((c) => c.id!).toSet();
+        });
+      }
+    });
   }
 
   void _onSearchChanged(String query) {
@@ -55,9 +106,12 @@ class _SearchPageState extends State<SearchPage>
     });
 
     try {
+      final idsToSearch = _selectedCollectionIds.isNotEmpty
+          ? _selectedCollectionIds
+          : _accessibleCollectionIds;
       final results = await _dbService.searchWords(
         _searchController.text,
-        collectionIds: _selectedCollectionIds,
+        collectionIds: idsToSearch,
       );
       setState(() {
         _searchResults = results;
@@ -101,7 +155,7 @@ class _SearchPageState extends State<SearchPage>
 
     if (confirm == true) {
       await _dbService.deleteWord(word.id!);
-      _performSearch(); // Refresh list
+      _performSearch(); 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -116,8 +170,8 @@ class _SearchPageState extends State<SearchPage>
   Future<void> _editWord(Word word) async {
     final wordCtrl = TextEditingController(text: word.word);
     final defCtrl = TextEditingController(text: word.definition);
-    final trCtrl = TextEditingController(text: word.meaningTr);
-    final exCtrl = TextEditingController(text: word.example);
+    final trCtrl = TextEditingController(text: word.translation);
+    final exCtrl = TextEditingController(text: word.contextualInfo);
 
     await showDialog(
       context: context,
@@ -152,8 +206,8 @@ class _SearchPageState extends State<SearchPage>
                   collectionId: word.collectionId,
                   word: wordCtrl.text,
                   definition: defCtrl.text,
-                  meaningTr: trCtrl.text,
-                  example: exCtrl.text,
+                  translation: trCtrl.text,
+                  contextualInfo: exCtrl.text,
                 );
                 await _dbService.updateWord(updatedWord);
                 if (ctx.mounted) {
@@ -233,29 +287,30 @@ class _SearchPageState extends State<SearchPage>
                       ),
                     ),
                   ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _editWord(word);
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.redAccent),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _deleteWord(word);
-                        },
-                      ),
-                    ],
-                  ),
+                  if (_editableCollectionIds.contains(word.collectionId))
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _editWord(word);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.redAccent),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _deleteWord(word);
+                          },
+                        ),
+                      ],
+                    ),
                 ],
               ),
               const SizedBox(height: 5),
               Text(
-                word.meaningTr,
+                word.translation,
                 style: const TextStyle(
                   fontSize: 22,
                   color: Colors.deepPurpleAccent,
@@ -269,11 +324,11 @@ class _SearchPageState extends State<SearchPage>
                 _buildDetailRow(Icons.menu_book, "Definition", word.definition),
                 const SizedBox(height: 20),
               ],
-              if (word.example.isNotEmpty) ...[
+              if (word.contextualInfo.isNotEmpty) ...[
                 _buildDetailRow(
                   Icons.format_quote_rounded,
                   "Example",
-                  word.example,
+                  word.contextualInfo,
                 ),
               ],
               const SizedBox(height: 20),
@@ -326,29 +381,16 @@ class _SearchPageState extends State<SearchPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     "Search & Browse",
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      setState(() {
-                        _showFilter = !_showFilter;
-                      });
-                    },
-                    icon: Icon(
-                      _showFilter ? Icons.filter_list_off : Icons.filter_list,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    tooltip: _showFilter ? "Hide Filter" : "Show Filter",
                   ),
                 ],
               ),
@@ -384,42 +426,23 @@ class _SearchPageState extends State<SearchPage>
 
               const SizedBox(height: 15),
 
-              // Filter - Expandable Section
-              ExpandableSection(
-                isExpanded: _showFilter,
-                title: "Filter by Collection",
-                icon: Icons.filter_list,
-                onToggle: () => setState(() => _showFilter = !_showFilter),
-                child: StreamBuilder<List<Collection>>(
-                  stream: _dbService.getCollectionsStream(),
-                  builder: (context, snapshot) {
-                    final collections = snapshot.data ?? [];
-                    List<String> collectionNames = collections
-                        .map((c) => c.name)
+              // Her zaman görünür MultiSelectDropdown
+              MultiSelectDropdown(
+                items: _accessibleCollections.map((c) => c.name).toList(),
+                selectedItems: _accessibleCollections
+                    .where((c) => _selectedCollectionIds.contains(c.id))
+                    .map((c) => c.name)
+                    .toList(),
+                hint: "Filter by Collection (All)",
+                onChanged: (List<String> newSelectedNames) {
+                  setState(() {
+                    _selectedCollectionIds = _accessibleCollections
+                        .where((c) => newSelectedNames.contains(c.name))
+                        .map((c) => c.id!)
                         .toList();
-
-                    // Filter valid selected IDs
-                    List<String> selectedNames = collections
-                        .where((c) => _selectedCollectionIds.contains(c.id))
-                        .map((c) => c.name)
-                        .toList();
-
-                    return MultiSelectDropdown(
-                      items: collectionNames,
-                      selectedItems: selectedNames,
-                      hint: "Filter by Collection (All)",
-                      onChanged: (List<String> newSelectedNames) {
-                        setState(() {
-                          _selectedCollectionIds = collections
-                              .where((c) => newSelectedNames.contains(c.name))
-                              .map((c) => c.id!)
-                              .toList();
-                        });
-                        _performSearch();
-                      },
-                    );
-                  },
-                ),
+                  });
+                  _performSearch();
+                },
               ),
 
               const SizedBox(height: 15),
@@ -439,8 +462,7 @@ class _SearchPageState extends State<SearchPage>
                         )
                       : _searchResults.isEmpty
                       ? ListView(
-                          physics:
-                              const AlwaysScrollableScrollPhysics(), // Ensure refresh works even if empty
+                          physics: const AlwaysScrollableScrollPhysics(), 
                           children: [
                             SizedBox(
                               height: MediaQuery.of(context).size.height * 0.2,
@@ -466,8 +488,7 @@ class _SearchPageState extends State<SearchPage>
                         )
                       : ListView.builder(
                           itemCount: _searchResults.length,
-                          physics:
-                              const AlwaysScrollableScrollPhysics(), // Ensure refresh works
+                          physics: const AlwaysScrollableScrollPhysics(), 
                           itemBuilder: (context, index) {
                             final word = _searchResults[index];
                             return Card(
@@ -491,34 +512,36 @@ class _SearchPageState extends State<SearchPage>
                                   ),
                                 ),
                                 subtitle: Text(
-                                  word.meaningTr,
+                                  word.translation,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(color: Colors.white70),
                                 ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.edit,
-                                        size: 20,
-                                        color: Colors.blueGrey,
-                                      ),
-                                      onPressed: () => _editWord(word),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete,
-                                        size: 20,
-                                        color: Colors.redAccent,
-                                      ),
-                                      onPressed: () => _deleteWord(word),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                  ],
-                                ),
+                                trailing: _editableCollectionIds.contains(word.collectionId)
+                                    ? Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.edit,
+                                              size: 20,
+                                              color: Colors.blueGrey,
+                                            ),
+                                            onPressed: () => _editWord(word),
+                                            visualDensity: VisualDensity.compact,
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete,
+                                              size: 20,
+                                              color: Colors.redAccent,
+                                            ),
+                                            onPressed: () => _deleteWord(word),
+                                            visualDensity: VisualDensity.compact,
+                                          ),
+                                        ],
+                                      )
+                                    : null,
                               ),
                             );
                           },

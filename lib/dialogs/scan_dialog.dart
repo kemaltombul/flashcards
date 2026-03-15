@@ -131,8 +131,8 @@ class _ScanDialogState extends State<ScanDialog> {
           collectionId: _selectedCollectionId!,
           word: aiData['word'],
           definition: aiData['definition'],
-          meaningTr: aiData['meaning_tr'],
-          example: aiData['example'],
+          translation: aiData['translation'],
+          contextualInfo: aiData['contextual_info'],
         );
 
         await _dbService.insertWord(newWord);

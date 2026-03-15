@@ -93,12 +93,18 @@ class _AddWordPageState extends State<AddWordPage>
         _contextController.text, // Use dedicated context input
         _selectedCollectionId!,
       );
-      final word = Word.fromMap(data);
+      final word = Word(
+        collectionId: data['collection_id'],
+        word: data['word'] ?? '',
+        definition: data['definition'] ?? '',
+        translation: data['translation'] ?? '',
+        contextualInfo: data['contextual_info'] ?? '',
+      );
 
       setState(() {
         _defController.text = word.definition;
-        _trController.text = word.meaningTr;
-        _exController.text = word.example;
+        _trController.text = word.translation;
+        _exController.text = word.contextualInfo;
         _showSecondaryFields = true;
       });
     } catch (e) {
@@ -130,8 +136,8 @@ class _AddWordPageState extends State<AddWordPage>
           collectionId: _selectedCollectionId!,
           word: _wordController.text.trim(),
           definition: _defController.text.trim(),
-          meaningTr: _trController.text.trim(),
-          example: _exController.text.trim(),
+          translation: _trController.text.trim(),
+          contextualInfo: _exController.text.trim(),
         ),
       );
 

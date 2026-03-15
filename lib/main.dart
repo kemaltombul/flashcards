@@ -57,15 +57,67 @@ class VocabularyApp extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              backgroundColor: Colors.black, // Match native splash exactly
+              body: SizedBox.shrink(), // No spinner
             );
           }
           if (snapshot.hasData) {
-            return const MainPage(); // Direct to Main Navigation
+            return const AppPreparationGate(); // Prepares and then shows MainPage
           }
           return const LoginPage();
         },
       ),
     );
+  }
+}
+
+/// A gate to smoothly transition from the native splash screen.
+/// Precaches *only* the single required background image to avoid
+/// the image "popping in" while keeping disk I/O minimal.
+class AppPreparationGate extends StatefulWidget {
+  const AppPreparationGate({super.key});
+
+  @override
+  State<AppPreparationGate> createState() => _AppPreparationGateState();
+}
+
+class _AppPreparationGateState extends State<AppPreparationGate> {
+  bool _isReady = false;
+  late String _initialBgImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialBgImage = 'assets/images/bg${(DateTime.now().millisecond % 10) + 1}.jpg';
+    _prepareApp();
+  }
+
+  Future<void> _prepareApp() async {
+    try {
+      // 1. Precache only the specific background being used. (Fast)
+      await precacheImage(AssetImage(_initialBgImage), context);
+    } catch (_) {}
+
+    // 2. Add an unnoticeable delay to ensure the framework renders the transition
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // 3. Mount MainPage precisely when rendering is guaranteed to be fully painted
+    if (mounted) {
+      setState(() => _isReady = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isReady) {
+      // Maintain the illusion that the Android splash screen is still present
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: SizedBox.shrink(),
+      );
+    }
+    
+    // Smoothly present the fully rendered MainPage
+    return MainPage(initialBgImage: _initialBgImage);
   }
 }

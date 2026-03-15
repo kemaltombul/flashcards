@@ -32,9 +32,9 @@ class AIService {
     // Initialize result
     Map<String, String?> result = {
       'word': null,
-      'meaning_tr': null,
       'definition': null,
-      'example': null,
+      'translation': null,
+      'contextual_info': null,
     };
 
     // Pattern 1: "word: meaning" or "word - meaning" (Turkish meaning)
@@ -52,7 +52,7 @@ class AIService {
       result['word'] = word;
       if (hasTurkish || rest.split(' ').length <= 3) {
         // Likely Turkish meaning
-        result['meaning_tr'] = rest;
+        result['translation'] = rest;
       } else {
         // Likely English definition
         result['definition'] = rest;
@@ -66,7 +66,7 @@ class AIService {
     
     if (parenMatch != null) {
       result['word'] = parenMatch.group(1)!.trim();
-      result['meaning_tr'] = parenMatch.group(2)!.trim();
+      result['translation'] = parenMatch.group(2)!.trim();
       return result;
     }
 
@@ -76,12 +76,22 @@ class AIService {
                        RegExp(r'[.!?,]').hasMatch(trimmed));
     
     if (isSentence) {
-      result['example'] = trimmed;
+      result['contextual_info'] = trimmed;
       // Word will be extracted by AI
       return result;
     }
 
-    // Pattern 4: Single word or phrase
+    // Pattern 4: Specific prefixes for direct assignment
+    if (trimmed.startsWith('translation:')) {
+      result['translation'] = trimmed.substring(12).trim();
+      return result;
+    }
+    if (trimmed.startsWith('contextual_info:')) {
+      result['contextual_info'] = trimmed.substring(16).trim();
+      return result;
+    }
+
+    // Pattern 5: Single word or phrase
     result['word'] = trimmed;
     return result;
   }
@@ -101,34 +111,11 @@ class AIService {
 
       String normalizedWord = inputWord.trim();
 
-      // 2. Database Validation (Uniqueness Check)
-      // If user provides a context/meaning, we check if THAT specific meaning exists.
-      if (userDefinition != null && userDefinition.isNotEmpty) {
-        bool specificExists = await _dbService.wordAndMeaningExists(
-          normalizedWord,
-          userDefinition,
-        );
-        if (specificExists) {
-          throw Exception(
-            "Word '$normalizedWord' with meaning '$userDefinition' already exists.",
-          );
-        }
-      } else {
-        // Fallback: If no context provided, block if word exists at all to be safe
-        bool exists = await _dbService.wordExists(normalizedWord);
-        if (exists) {
-          throw Exception(
-            "Word '$normalizedWord' already exists. Add a specific meaning to add a new definition.",
-          );
-        }
-      }
-
-
       // 3. Parse Context Input (Step 2) to extract available data
       Map<String, String?> parsedContext = {
-        'meaning_tr': null,
         'definition': null,
-        'example': null,
+        'translation': null,
+        'contextual_info': null,
       };
       
       if (userDefinition != null && userDefinition.trim().isNotEmpty) {
@@ -138,9 +125,9 @@ class AIService {
       // 4. API Request (Enrichment) - pass parsed context to AI
       final Map<String, dynamic> aiData = await _fetchWordDetailsFromAI(
         normalizedWord,
-        existingMeaning: parsedContext['meaning_tr'],
         existingDefinition: parsedContext['definition'],
-        existingExample: parsedContext['example'],
+        existingTranslation: parsedContext['translation'],
+        existingContextualInfo: parsedContext['contextual_info'],
         context: userDefinition,
       );
 
@@ -149,8 +136,8 @@ class AIService {
         'collection_id': collectionId,
         'word': aiData['word'],
         'definition': aiData['definition'],
-        'meaning_tr': aiData['meaning_tr'],
-        'example': aiData['example'],
+        'translation': aiData['translation'],
+        'contextual_info': aiData['contextual_info'],
       };
     } catch (e) {
       rethrow;
@@ -160,9 +147,9 @@ class AIService {
   /// Private helper to call the OpenAI API.
   Future<Map<String, dynamic>> _fetchWordDetailsFromAI(
     String word, {
-    String? existingMeaning,
     String? existingDefinition,
-    String? existingExample,
+    String? existingTranslation,
+    String? existingContextualInfo,
     String? context,
   }) async {
     // Detect if the "word" itself is actually a sentence (heuristic: > 2 words or contains punctuation?)
@@ -200,16 +187,16 @@ The user input under "Word" appears to be a full sentence.
 
     // Build existing data instruction
     String existingDataInstruction = "";
-    if (existingMeaning != null || existingDefinition != null || existingExample != null) {
+    if (existingTranslation != null || existingDefinition != null || existingContextualInfo != null) {
       existingDataInstruction = "\n\nEXISTING DATA PROVIDED BY USER:";
-      if (existingMeaning != null) {
-        existingDataInstruction += "\n- Turkish Meaning: \"$existingMeaning\" (Use this if accurate, or correct it if wrong)";
+      if (existingTranslation != null) {
+        existingDataInstruction += "\n- Translation: \"$existingTranslation\" (Use this if accurate, or correct it if wrong)";
       }
       if (existingDefinition != null) {
         existingDataInstruction += "\n- Definition: \"$existingDefinition\" (Use this if accurate, or improve it to A1 level)";
       }
-      if (existingExample != null) {
-        existingDataInstruction += "\n- Example: \"$existingExample\" (Extract the word from this sentence if needed)";
+      if (existingContextualInfo != null) {
+        existingDataInstruction += "\n- Contextual Info: \"$existingContextualInfo\" (Extract the word from this sentence if needed)";
       }
       existingDataInstruction += "\n\nIMPORTANT: Fill ONLY the missing fields. Keep user-provided data if it's accurate.";
     }
@@ -225,11 +212,9 @@ $existingDataInstruction
 
 Rules:
 1. Definition: Must be **CEFR A1 Level**. Use ONLY basic, high-frequency words. Max 12 words. Simple and clear.
-2. Accuracy: Provide the correct Turkish meaning (matching the context if given) and a correct, simple example sentence (A1).
-3. Smart Filling: If user provided some fields, validate them and fill ONLY what's missing.
-4. Output: JSON only.
-
-Returns: {"word": "...", "definition": "...", "meaning_tr": "...", "example": "..."}
+2. Accuracy: Provide the correct translation in the appropriate language (e.g. Turkish) (matching the context if given) and a specific contextual sentence or synonym string (A1).
+3. JSON Format: The response must be STRICTLY valid JSON like this, with NO markdown formatting, NO backticks, and NO other text before or after:
+{"word": "...", "definition": "...", "translation": "...", "contextual_info": "..."}
     """;
 
     try {

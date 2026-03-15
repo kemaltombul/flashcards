@@ -1,0 +1,33 @@
+{
+    "indexes": [
+        {
+            "collectionGroup": "collections",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "share_code",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "is_shared",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "collections",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "owner_id",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "created_at",
+                    "order": "DESCENDING"
+                }
+            ]
+        }
+    ],
+    "fieldOverrides": []
+}

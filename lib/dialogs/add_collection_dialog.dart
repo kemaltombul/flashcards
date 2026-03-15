@@ -11,7 +11,6 @@ class AddCollectionDialog extends StatefulWidget {
 class _AddCollectionDialogState extends State<AddCollectionDialog> {
   final FirestoreService _dbService = FirestoreService();
   final TextEditingController _controller = TextEditingController();
-  bool _isGameMode = false;
 
   // Colors
   final Color _cardColor = const Color(0xFF1E1E1E);
@@ -58,23 +57,6 @@ class _AddCollectionDialogState extends State<AddCollectionDialog> {
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          SwitchListTile(
-            title: Text("Game Mode", style: _textStyle.copyWith(fontSize: 16)),
-            subtitle: Text(
-              _isGameMode
-                  ? "Timer ON, Meaning Hidden"
-                  : "Timer OFF, Show Meaning",
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
-            ),
-            value: _isGameMode,
-            activeTrackColor: _accentColor,
-            onChanged: (val) {
-              setState(() {
-                _isGameMode = val;
-              });
-            },
-          ),
         ],
       ),
       actions: [
@@ -95,7 +77,7 @@ class _AddCollectionDialogState extends State<AddCollectionDialog> {
           ),
           onPressed: () async {
             if (_controller.text.isNotEmpty) {
-              await _dbService.createCollection(_controller.text, _isGameMode);
+              await _dbService.createCollection(_controller.text, false); // isShared = false initially
               if (mounted) {
                 Navigator.pop(context);
               }

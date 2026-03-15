@@ -52,11 +52,12 @@ class _CollectionSelectorState extends State<CollectionSelector> {
             color: const Color(0xFF1E1E1E), // Match app theme
             shadowColor: Colors.black54,
             child: StreamBuilder<List<Collection>>(
-              stream: _dbService.getCollectionsStream(),
+              stream: _dbService.getEditableCollectionsStream(),
               builder: (context, snapshot) {
                 final collections = snapshot.data ?? [];
 
                 return TapRegion(
+                  groupId: 'collection-dropdown-${widget.hashCode}',
                   onTapOutside: (_) => _closeDropdown(),
                   child: Container(
                     constraints: const BoxConstraints(maxHeight: 250),
@@ -93,9 +94,7 @@ class _CollectionSelectorState extends State<CollectionSelector> {
                                   child: Row(
                                     children: [
                                       Icon(
-                                        col.isGame
-                                            ? Icons.videogame_asset
-                                            : Icons.book,
+                                        Icons.folder_outlined,
                                         size: 18,
                                         color: isSelected
                                             ? const Color(0xFFBB86FC)
@@ -165,7 +164,7 @@ class _CollectionSelectorState extends State<CollectionSelector> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Collection>>(
-      stream: _dbService.getCollectionsStream(),
+      stream: _dbService.getEditableCollectionsStream(),
       builder: (context, snapshot) {
         final collections = snapshot.data ?? [];
 
@@ -194,46 +193,46 @@ class _CollectionSelectorState extends State<CollectionSelector> {
           displayLabel = "No Collections";
         }
 
-        return CompositedTransformTarget(
-          link: _layerLink,
-          child: GestureDetector(
-            onTap: collections.isEmpty ? null : _toggleDropdown,
-            child: Container(
-              padding: widget.isDense
-                  ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
-                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              decoration: BoxDecoration(
-                color: Colors
-                    .transparent, // Let parent handle color or use isDense for transparent
-                borderRadius: BorderRadius.circular(12),
-                border: widget.isDense
-                    ? null
-                    : Border.all(
-                        color: Colors.white12,
-                      ), // Remove border if dense (handled by parent)
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      displayLabel,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: (validSelectedId == null)
-                            ? Colors.white38
-                            : Colors.white,
+        return TapRegion(
+          groupId: 'collection-dropdown-${widget.hashCode}',
+          child: CompositedTransformTarget(
+            link: _layerLink,
+            child: GestureDetector(
+              onTap: collections.isEmpty ? null : _toggleDropdown,
+              child: Container(
+                padding: widget.isDense
+                    ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
+                    : const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: widget.isDense
+                      ? null
+                      : Border.all(color: Colors.white12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        displayLabel,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: (validSelectedId == null)
+                              ? Colors.white38
+                              : Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Icon(
-                    _isDropdownOpen
-                        ? Icons.arrow_drop_up
-                        : Icons.arrow_drop_down,
-                    color: Colors.white70,
-                  ),
-                ],
+                    Icon(
+                      _isDropdownOpen
+                          ? Icons.arrow_drop_up
+                          : Icons.arrow_drop_down,
+                      color: Colors.white70,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -242,3 +241,4 @@ class _CollectionSelectorState extends State<CollectionSelector> {
     );
   }
 }
+

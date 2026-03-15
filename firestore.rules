@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════════════════════════════
+    // YARDIMCI FONKSİYONLAR
+    // ═══════════════════════════════════════════════════════════════
+
+    // Giriş yapılmış mı?
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    // İstek sahibi, hedef UID ile aynı mı?
+    function isSelf(uid) {
+      return isLoggedIn() && request.auth.uid == uid;
+    }
+
+    // Koleksiyon belgesini doğrudan oku (words için get() zorunlu)
+    function collectionData(collectionId) {
+      return get(/databases/$(database)/documents/collections/$(collectionId)).data;
+    }
+
+    // Koleksiyonun sahibi mi?
+    function isCollectionOwner(collectionId) {
+      return isLoggedIn() &&
+        collectionData(collectionId).owner_id == request.auth.uid;
+    }
+
+    // Koleksiyonun editörü mü?
+    function isCollectionEditor(collectionId) {
+      return isLoggedIn() &&
+        request.auth.uid in collectionData(collectionId).editor_uids;
+    }
+
+    // Koleksiyonun owner veya editörü mü?
+    function isCollectionMember(collectionId) {
+      return isCollectionOwner(collectionId) || isCollectionEditor(collectionId);
+    }
+
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // 1. KULLANICI PROFİLLERİ  /users/{userId}
+    // ═══════════════════════════════════════════════════════════════
+    match /users/{userId} {
+
+      // Herkes diğer kullanıcıların profilini okuyabilir (username araması için gerekli).
+      // Not: Firestore belge bazında alan kısıtlaması yapamaz.
+      // Hassas alanlar (subscribed_collections, favorites) Cloud Function ile gizlenip
+      // yalnızca username/uid gibi public alanlar döndürülebilir (ileride optimize edilebilir).
+      allow read: if isLoggedIn();
+
+      // Yeni profil: sadece kendi UID'i ile oluşturulabilir
+      // Zorunlu alanlar: username (string)
+      allow create: if isSelf(userId)
+        && request.resource.data.keys().hasAll(['uid', 'username'])
+        && request.resource.data.uid    == request.auth.uid
+        && request.resource.data.username is string
+        && request.resource.data.username.size() >= 3;
+
+      // Güncelleme: sadece sahibi; uid asla değiştirilemez.
+      // username is string kontrolü KALDIRILDI — subscribed_collections gibi 
+      // kısmi (partial) FieldValue.arrayUnion güncellemelerini engelliyordu.
+      allow update: if isSelf(userId)
+        && request.resource.data.uid == resource.data.uid;
+
+      // Silme yasak — hesap silme işlemi Admin SDK / Cloud Function ile yapılmalı
+      allow delete: if false;
+
+
+      // ── 1a. Kişisel Kelime İstatistikleri  /users/{userId}/word_stats/{wordId}
+      match /word_stats/{wordId} {
+        allow read:   if isSelf(userId);
+
+        allow create: if isSelf(userId)
+          && request.resource.data.keys().hasAll(['collection_id', 'view_count'])
+          && request.resource.data.collection_id is string
+          && request.resource.data.view_count    is int;
+
+        // user_id veya word_id'nin değiştirilmesi yasak
+        allow update: if isSelf(userId);
+
+        allow delete: if isSelf(userId);
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // 2. KOLEKSİYONLAR  /collections/{collectionId}
+    // ═══════════════════════════════════════════════════════════════
+    match /collections/{collectionId} {
+
+      // Okuma: sahibi, editörü veya herkese açık ise
+      // ✅  Burada resource.data doğrudan kullanılır; get() ÇAĞIRILMAZ
+      allow read: if isLoggedIn() && (
+        resource.data.owner_id == request.auth.uid           ||
+        request.auth.uid in resource.data.editor_uids        ||
+        resource.data.is_shared == true
+      );
+
+      // Oluşturma: zorunlu alan şeması + owner_id kendi UID'i olmalı
+      allow create: if isLoggedIn()
+        && request.resource.data.keys().hasAll([
+             'name', 'owner_id', 'is_shared', 'editor_uids', 'share_code', 'created_at'
+           ])
+        && request.resource.data.owner_id   == request.auth.uid
+        && request.resource.data.name        is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.is_shared   is bool
+        && request.resource.data.editor_uids is list;
+
+      // Güncelleme — Owner: editor_uids dahil her şeyi güncelleyebilir (sahipliği devredemez)
+      allow update: if isLoggedIn()
+        && resource.data.owner_id == request.auth.uid
+        && request.resource.data.owner_id == resource.data.owner_id;
+
+      // Güncelleme — Editör: koleksiyonu düzenleyebilir AMA
+      //   • owner_id değiştirilemez
+      //   • editor_uids değiştirilemez (editör listesini sadece owner yönetir)
+      allow update: if isLoggedIn()
+        && request.auth.uid in resource.data.editor_uids
+        && request.resource.data.owner_id    == resource.data.owner_id
+        && request.resource.data.editor_uids == resource.data.editor_uids;
+
+      // Silme: sadece owner
+      allow delete: if isLoggedIn()
+        && resource.data.owner_id == request.auth.uid;
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // 3. KELİMELER  /words/{wordId}
+    // ═══════════════════════════════════════════════════════════════
+    match /words/{wordId} {
+
+      // Okuma: Giriş yapmış herkes kelimeleri görebilir.
+      // NOT: isCollectionMember() içinde get() çağırıyor. Query (toplu sorgu) sırasında
+      // Firestore her belge için get() yapamaz → sorguyu reddeder ("Rules are NOT Filters").
+      // Yazma operasyonları (create/update/delete) tek belge üzerinde çalışır, orada get() geçerlidir.
+      // Uygulama seviyesinde erişim kontrolü zaten CollectionId filtresiyle sağlanıyor.
+      allow read: if isLoggedIn();
+
+      // Ekleme: koleksiyon üyesi + zorunlu alanlar sağlanmalı
+      // collection_id asla boş olamaz
+      allow create: if isLoggedIn()
+        && request.resource.data.keys().hasAll(['collection_id', 'word', 'definition'])
+        && request.resource.data.collection_id is string
+        && request.resource.data.collection_id.size() > 0
+        && request.resource.data.word           is string
+        && request.resource.data.word.size()    >= 1
+        && isCollectionMember(request.resource.data.collection_id);
+
+      // Güncelleme: koleksiyon üyesi; collection_id değiştirilemez
+      allow update: if isLoggedIn()
+        && isCollectionMember(resource.data.collection_id)
+        && request.resource.data.collection_id == resource.data.collection_id;
+
+      // Silme: koleksiyon üyesi
+      allow delete: if isLoggedIn()
+        && isCollectionMember(resource.data.collection_id);
+    }
+
+  }
+}

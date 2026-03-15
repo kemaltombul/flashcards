@@ -48,6 +48,7 @@ class _MultiSelectDropdownState extends State<MultiSelectDropdown> {
             color: const Color(0xFF1E1E1E), // Match app theme
             shadowColor: Colors.black54,
             child: TapRegion(
+              groupId: this, // EKLENDİ: Bu menüyü başlıkla aynı gruba bağlar
               onTapOutside: (_) => _closeDropdown(),
               child: Container(
                 constraints: const BoxConstraints(maxHeight: 250),
@@ -112,7 +113,11 @@ class _MultiSelectDropdownState extends State<MultiSelectDropdown> {
   }
 
   void _closeDropdown() {
+    // EKLENDİ: Zaten kapalıysa tekrar denememesi için ufak bir koruma
+    if (!_isDropdownOpen || _overlayEntry == null) return; 
+    
     _overlayEntry?.remove();
+    _overlayEntry = null; // Bellek sızıntısını ve null check hatalarını önler
     setState(() => _isDropdownOpen = false);
   }
 
@@ -136,39 +141,43 @@ class _MultiSelectDropdownState extends State<MultiSelectDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: GestureDetector(
-        onTap: _toggleDropdown,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.black12,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  widget.selectedItems.isEmpty
-                      ? widget.hint
-                      : widget.selectedItems.join(", "),
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: widget.selectedItems.isEmpty
-                        ? Colors.white38
-                        : Colors.white,
+    // EKLENDİ: Başlığı da aynı TapRegion grubuna dahil ediyoruz
+    return TapRegion(
+      groupId: this, // Menüdeki groupId ile aynı (this referansı)
+      child: CompositedTransformTarget(
+        link: _layerLink,
+        child: GestureDetector(
+          onTap: _toggleDropdown,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.selectedItems.isEmpty
+                        ? widget.hint
+                        : widget.selectedItems.join(", "),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: widget.selectedItems.isEmpty
+                          ? Colors.white38
+                          : Colors.white,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              Icon(
-                _isDropdownOpen ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-                color: Colors.white70,
-              ),
-            ],
+                Icon(
+                  _isDropdownOpen ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                  color: Colors.white70,
+                ),
+              ],
+            ),
           ),
         ),
       ),

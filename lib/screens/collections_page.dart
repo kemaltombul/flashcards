@@ -1,14 +1,21 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
 import '../models/collection.dart';
+import '../models/user_profile.dart';
 import '../dialogs/add_collection_dialog.dart';
 import '../dialogs/rename_collection_dialog.dart';
+import '../dialogs/manage_editors_dialog.dart';
 import 'flashcard_page.dart';
 import 'search_page.dart';
+import 'profile_page.dart';
+import '../dialogs/scan_dialog.dart';
+import '../services/ai_service.dart';
+import 'package:rxdart/rxdart.dart';
 
 
 
@@ -36,12 +43,50 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
     letterSpacing: 0.5,
   );
 
+  late Stream<UserProfile?> _userProfileStream;
+  late Stream<List<Collection>> _collectionsStream;
+  late Stream<int> _streakStream;
+
   @override
   bool get wantKeepAlive => true; // Keep page alive
 
   @override
   void initState() {
     super.initState();
+    _streakStream = _dbService.getUserStreakStream();
+    
+    // 1. Get a broadcast stream of the user profile so multiple listeners can use it
+    _userProfileStream = _dbService.getUserProfileStream().asBroadcastStream();
+
+    // 2. Create a reactive stream that merges owned and subscribed collections
+    _collectionsStream = _userProfileStream.switchMap((profile) {
+      // Always get owned and editable collections
+      final ownedStream = _dbService.getEditableCollectionsStream();
+
+      // If profile exists and has subscriptions, get those too
+      if (profile != null && profile.subscribedCollections.isNotEmpty) {
+        final subStream = _dbService.getSubscribedCollectionsStream(profile);
+        
+        // Merge them together and sort by created_at
+        return Rx.combineLatest2(
+          ownedStream, 
+          subStream, 
+          (List<Collection> owned, List<Collection> subs) {
+            final combined = [...owned, ...subs];
+            // Sort by createdAt descending (handling potential nulls gracefully)
+            combined.sort((a, b) {
+              final aTime = a.createdAt ?? DateTime(2000);
+              final bTime = b.createdAt ?? DateTime(2000);
+              return bTime.compareTo(aTime);
+            });
+            return combined;
+          }
+        );
+      } else {
+        // No subscriptions, just return owned
+        return ownedStream;
+      }
+    });
   }
   
   /// Creates a custom page transition with fade and scale effects.
@@ -60,36 +105,7 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
     );
   }
 
-  Future<void> _launchGitHub() async {
-    final Uri url = Uri.parse('https://github.com/kemaltombul');
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) throw Exception('Could not launch $url');
-  }
 
-  Future<void> _launchMail() async {
-    final Uri emailLaunchUri = Uri(scheme: 'mailto', path: 'kemaltombull@hotmail.com', query: 'subject=Flashcard App Feedback');
-    if (!await launchUrl(emailLaunchUri)) throw Exception('Could not launch email');
-  }
-
-  /// Shows a bottom sheet with contact options.
-  void _showContactMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: _cardColor,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text("Contact Developer", style: _textStyle.copyWith(fontSize: 18, color: _accentColor, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 15),
-            ListTile(leading: const Icon(Icons.code, color: Colors.white70), title: Text("GitHub", style: _textStyle), onTap: () { Navigator.pop(context); _launchGitHub(); }),
-            ListTile(leading: const Icon(Icons.email_outlined, color: Colors.redAccent), title: Text("Send Email", style: _textStyle), onTap: () { Navigator.pop(context); _launchMail(); }),
-          ],
-        ),
-      ),
-    );
-  }
 
   /// Displays a dialog to create a new collection.
   void _showAddCollectionDialog() {
@@ -99,11 +115,78 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
     );
   }
 
+  void _showSubscribeDialog() {
+    TextEditingController codeController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text("Subscribe to Collection", style: _textStyle.copyWith(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: codeController,
+          autofocus: true,
+          maxLength: 6,
+          textCapitalization: TextCapitalization.characters,
+          style: const TextStyle(color: Colors.white, fontSize: 24, letterSpacing: 5),
+          textAlign: TextAlign.center,
+          decoration: InputDecoration(
+            hintText: "XXXXXX",
+            hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+            filled: true,
+            fillColor: Colors.black12,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text("Cancel", style: TextStyle(color: Colors.grey.shade400)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFBB86FC),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            onPressed: () async {
+              final code = codeController.text.trim();
+              if (code.length != 6) return;
+              
+              Navigator.pop(ctx);
+              bool success = await _dbService.subscribeByShareCode(code);
+              
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      success ? "Successfully subscribed!" : "Invalid Code or Collection is Private.", 
+                      style: const TextStyle(color: Colors.black)
+                    ), 
+                    backgroundColor: success ? Colors.greenAccent : Colors.redAccent,
+                  )
+                );
+              }
+            },
+            child: const Text("Subscribe", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
   /// Displays a dialog to rename a collection.
   void _showRenameDialog(Collection collection) {
     showDialog(
       context: context,
       builder: (context) => RenameCollectionDialog(collection: collection),
+    );
+  }
+
+  /// Displays the dialog for managing editors (collaborators).
+  void _showManageEditorsDialog(Collection collection) {
+    showDialog(
+      context: context,
+      builder: (context) => ManageEditorsDialog(collection: collection),
     );
   }
 
@@ -149,9 +232,14 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
     Widget content = Scaffold(
       backgroundColor: _backgroundColor,
       body: SafeArea(
-        child: StreamBuilder<List<Collection>>(
-          stream: _dbService.getCollectionsStream(),
-          builder: (context, snapshot) {
+        child: StreamBuilder<UserProfile?>(
+          stream: _userProfileStream,
+          builder: (context, profileSnapshot) {
+            final userProfile = profileSnapshot.data;
+
+            return StreamBuilder<List<Collection>>(
+              stream: _collectionsStream,
+              builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
@@ -162,13 +250,14 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
               slivers: [
                 SliverAppBar(
                   backgroundColor: Colors.transparent,
-                  expandedHeight: 170,
+                  expandedHeight: 220,
                   toolbarHeight: 70,
                   floating: false,
                   pinned: false,
                   flexibleSpace: FlexibleSpaceBar(
                     titlePadding: const EdgeInsets.only(left: 24, bottom: 16),
                     title: Column(
+                      mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -181,7 +270,7 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                         const SizedBox(height: 8),
                         // Streak Badge (Dynamic)
                         StreamBuilder<int>(
-                          stream: _dbService.getUserStreakStream(),
+                          stream: _streakStream,
                           builder: (context, streakSnapshot) {
                             final streak = streakSnapshot.data ?? 0;
                             
@@ -247,10 +336,10 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                         onSelected: (value) {
                           if (value == 'add') {
                             _showAddCollectionDialog();
-                          } else if (value == 'contact') {
-                            _showContactMenu();
-                          } else if (value == 'logout') {
-                            AuthService().signOut();
+                          } else if (value == 'subscribe') {
+                            _showSubscribeDialog();
+                          } else if (value == 'profile') {
+                             Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage()));
                           }
                         },
                         itemBuilder: (context) => [
@@ -265,22 +354,23 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                             ),
                           ),
                           PopupMenuItem(
-                            value: 'contact',
+                            value: 'subscribe',
                             child: Row(
                               children: [
-                                Icon(Icons.question_answer_outlined, color: _accentColor, size: 20),
+                                Icon(Icons.group_add_outlined, color: Colors.greenAccent, size: 20),
                                 const SizedBox(width: 12),
-                                const Text('Contact Developer', style: TextStyle(color: Colors.white)),
+                                const Text('Subscribe via Code', style: TextStyle(color: Colors.white)),
                               ],
                             ),
                           ),
-                          const PopupMenuItem(
-                            value: 'logout',
+
+                           PopupMenuItem(
+                            value: 'profile',
                             child: Row(
                               children: [
-                                Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
-                                SizedBox(width: 12),
-                                Text('Logout', style: TextStyle(color: Colors.white)),
+                                Icon(Icons.person_outline_rounded, color: _accentColor, size: 20),
+                                const SizedBox(width: 12),
+                                const Text('Profile', style: TextStyle(color: Colors.white)),
                               ],
                             ),
                           ),
@@ -315,7 +405,8 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final collection = collections[index];
-                              return _buildDarkCard(collection);
+                              final isFavorite = userProfile?.favoriteCollectionIds.contains(collection.id) ?? false;
+                              return _buildDarkCard(collection, isFavorite);
                             },
                             childCount: collections.length,
                           ),
@@ -325,6 +416,8 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
               ],
             );
           }
+        );
+          }
         ),
       ),
     );
@@ -333,20 +426,26 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
   }
 
   /// Builds a single collection card with gestures.
-  Widget _buildDarkCard(Collection collection) {
-    // Styling based on mode
-    final bool isGame = collection.isGame;
-    // Zen Card Styling
-    final Color iconColor = isGame ? const Color(0xFFFFB74D) : const Color(0xFF64B5F6); // Softer Orange / Blue
+  Widget _buildDarkCard(Collection collection, bool isFavorite) {
+    // We removed isGame from Collection, so we'll just style them uniformly or let the user choose inside.
+    // For now, let's pretend they are all "Study" or neutral.
+    final bool isShared = collection.isShared;
+    final bool isOwner = collection.ownerId == FirebaseAuth.instance.currentUser?.uid;
+    final String label = isOwner ? (isShared ? "Shared" : "Private") : "Subscribed";
+    final IconData labelIcon = isOwner ? (isShared ? Icons.public : Icons.lock_outline) : Icons.group_add_outlined;
+    final Color iconColor = isOwner 
+        ? (isShared ? const Color(0xFF66BB6A) : const Color(0xFF64B5F6)) 
+        : Colors.orangeAccent;
 
     return GestureDetector(
       onTap: () {
          if (mounted) {
+           // Provide a default isGame=false for now. Later we can add a dialog to pick mode.
            Navigator.of(context).push(_createFluidRoute(
              FlashcardPage(
                collectionId: collection.id!, 
                collectionName: collection.name,
-               isGame: collection.isGame,
+               isGame: false,
              )
            ));
          }
@@ -387,7 +486,7 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                   right: -15, 
                   bottom: -15, 
                   child: Icon(
-                    isGame ? Icons.gamepad_rounded : Icons.menu_book_rounded, 
+                    labelIcon, 
                     size: 100, 
                     color: iconColor.withOpacity(0.05)
                   )
@@ -411,22 +510,22 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(isGame ? Icons.gamepad : Icons.book, color: iconColor, size: 14),
+                              Icon(labelIcon, color: iconColor, size: 14),
                               const SizedBox(width: 5),
                               Text(
-                                isGame ? "Game" : "Study",
+                                label,
                                 style: TextStyle(color: iconColor, fontSize: 10, fontWeight: FontWeight.bold),
-                              )
+                              ),
                             ],
                           ),
                         ),
                         InkWell(
                           onTap: () async {
-                            await _dbService.toggleFavorite(collection.id!, collection.isFavorite);
+                            await _dbService.toggleFavorite(collection.id!, isFavorite);
                           },
                           child: Icon(
-                            collection.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, 
-                            color: collection.isFavorite ? const Color(0xFFFFD54F) : Colors.white24, 
+                            isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, 
+                            color: isFavorite ? const Color(0xFFFFD54F) : Colors.white24, 
                             size: 20
                           ),
                         )
@@ -472,51 +571,152 @@ class _CollectionsPageState extends State<CollectionsPage> with AutomaticKeepAli
             _showRenameDialog(collection);
           }
         ),
-        ListTile(
-          leading: Icon(Icons.download, color: Colors.blueAccent.shade100),
-          title: Text("Download as JSON", style: _textStyle),
-          onTap: () async {
-            Navigator.pop(sheetContext);
-            // String res = await _dbService.exportCollectionAsJson(collection.id!, collection.name);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Export disabled for Cloud migration", style: const TextStyle(color: Colors.black)), backgroundColor: _accentColor)
-              );
-            }
-          }
-        ),
-        ListTile(
-          leading: const Icon(Icons.delete, color: Colors.redAccent),
-          title: Text("Delete Collection", style: _textStyle),
-          onTap: () async {
-            Navigator.pop(sheetContext);
-            if (!context.mounted) return;
-            
-            bool? confirm = await showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: _cardColor,
-                title: Text("Are you sure?", style: _textStyle),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: Text("Cancel", style: TextStyle(color: Colors.grey.shade400)),
+
+        // Owner only actions
+        if (collection.ownerId == FirebaseAuth.instance.currentUser?.uid) ...[
+          ListTile(
+            leading: Icon(
+              collection.isShared ? Icons.lock : Icons.public, 
+              color: collection.isShared ? Colors.orangeAccent : Colors.greenAccent
+            ),
+            title: Text(collection.isShared ? "Make Private" : "Make Public", style: _textStyle),
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              
+              final newStatus = !collection.isShared;
+              final actionText = newStatus ? "Public" : "Private";
+              
+              bool? confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: _cardColor,
+                  title: Text("Make $actionText", style: _textStyle),
+                  content: Text(
+                    newStatus 
+                      ? "Making this collection public will allow anyone with the code to subscribe. Are you sure?" 
+                      : "Making this collection private will prevent new subscribers from joining. Are you sure?",
+                    style: const TextStyle(color: Colors.white70)
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text("Delete", style: TextStyle(color: Colors.redAccent)),
-                  )
-                ],
-              ),
-            );
-            
-            if (confirm == true) {
-              await _dbService.deleteCollection(collection.id!);
-              if (context.mounted) {
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text("Cancel", style: TextStyle(color: Colors.grey.shade400)),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text(actionText, style: TextStyle(color: newStatus ? Colors.greenAccent : Colors.orangeAccent)),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                await _dbService.updateCollectionVisibility(collection.id!, newStatus);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        newStatus ? "Collection is now Public!" : "Collection is now Private", 
+                        style: const TextStyle(color: Colors.black)
+                      ), 
+                      backgroundColor: _accentColor
+                    )
+                  );
+                }
               }
             }
-          },
-        ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.group_add, color: Colors.orangeAccent),
+            title: Text("Manage Editors", style: _textStyle),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              _showManageEditorsDialog(collection);
+            }
+          ),
+        ],
+
+        // Owner VE editörler: koleksiyon public ise kodu kopyalayabilir
+        if (collection.isShared && collection.shareCode != null)
+          ListTile(
+            leading: const Icon(Icons.share, color: Colors.white70),
+            title: Text("Copy Share Code", style: _textStyle),
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              await Clipboard.setData(ClipboardData(text: collection.shareCode!));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: const Text("Share Code copied!", style: TextStyle(color: Colors.black)), backgroundColor: _accentColor)
+                );
+              }
+            }
+          ),
+        if (collection.ownerId == FirebaseAuth.instance.currentUser?.uid)
+          ListTile(
+            leading: const Icon(Icons.delete, color: Colors.redAccent),
+            title: Text("Delete Collection", style: _textStyle),
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              if (!context.mounted) return;
+              
+              bool? confirm = await showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: _cardColor,
+                  title: Text("Are you sure?", style: _textStyle),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text("Cancel", style: TextStyle(color: Colors.grey.shade400)),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text("Delete", style: TextStyle(color: Colors.redAccent)),
+                    )
+                  ],
+                ),
+              );
+              
+              if (confirm == true) {
+                await _dbService.deleteCollection(collection.id!);
+                if (context.mounted) {
+                }
+              }
+            },
+          ),
+        
+        // Subscriber action
+        if (collection.ownerId != FirebaseAuth.instance.currentUser?.uid)
+          ListTile(
+            leading: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+            title: Text("Unsubscribe", style: _textStyle),
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              
+              bool? confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: _cardColor,
+                  title: Text("Unsubscribe", style: _textStyle),
+                  content: Text("Are you sure you want to unsubscribe from '${collection.name}'?", style: const TextStyle(color: Colors.white70)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text("Cancel", style: TextStyle(color: Colors.grey.shade400)),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text("Unsubscribe", style: TextStyle(color: Colors.redAccent)),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                await _dbService.unsubscribeFromCollection(collection.id!);
+              }
+            }
+          ),
       ]),
     );
   }

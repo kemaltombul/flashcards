@@ -5,7 +5,8 @@ import 'add_word_page.dart';
 import '../constants/app_theme.dart';
 
 class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+  final String? initialBgImage;
+  const MainPage({super.key, this.initialBgImage});
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -14,7 +15,6 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   final PageController _pageController = PageController(initialPage: 0);
   int _currentIndex = 0;
-  double _pageOffset = 0.0;
   late String _bgImage;
 
   final List<Widget> _pages = [const CollectionsPage(), const AddWordPage()];
@@ -22,15 +22,8 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize random background once
-    _bgImage = 'assets/images/bg${(DateTime.now().millisecond % 10) + 1}.jpg';
-
-    // Listen to page scroll position
-    _pageController.addListener(() {
-      setState(() {
-        _pageOffset = _pageController.page ?? 0.0;
-      });
-    });
+    // Initialize specific background if provided, else assign a random one
+    _bgImage = widget.initialBgImage ?? 'assets/images/bg${(DateTime.now().millisecond % 10) + 1}.jpg';
   }
 
   void _onItemTapped(int index) {
@@ -68,8 +61,18 @@ class _MainPageState extends State<MainPage> {
             right: -50,
             top: 0,
             bottom: 0,
-            child: Transform.translate(
-              offset: Offset(-_pageOffset * 40, 0), // Parallax effect
+            child: AnimatedBuilder(
+              animation: _pageController,
+              builder: (context, child) {
+                double pageOffset = 0.0;
+                if (_pageController.hasClients && _pageController.position.haveDimensions) {
+                  pageOffset = _pageController.page ?? 0.0;
+                }
+                return Transform.translate(
+                  offset: Offset(-pageOffset * 40, 0), // Parallax effect
+                  child: child,
+                );
+              },
               child: Container(
                 decoration: BoxDecoration(
                   image: DecorationImage(

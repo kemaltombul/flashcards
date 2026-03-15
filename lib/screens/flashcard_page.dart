@@ -8,7 +8,6 @@ import 'dart:math';
 import '../services/firestore_service.dart';
 import '../services/scoring_service.dart';
 import '../models/word.dart';
-import '../models/telemetry_data.dart';
 
 /// Displays flashcards for a collection, supporting both study and game modes.
 class FlashcardPage extends StatefulWidget {
@@ -174,20 +173,6 @@ class _FlashcardPageState extends State<FlashcardPage> {
     }
 
     // Calculate score
-    final score = _scoringService.calculateLearningScore(
-      durationMs / 1000.0,
-      _popupOpened,
-    );
-
-    // Context metrics
-    final hoursSinceView = word.lastReviewedAt != null
-        ? DateTime.now()
-              .difference(
-                DateTime.fromMillisecondsSinceEpoch(word.lastReviewedAt!),
-              )
-              .inHours
-        : null;
-
     int? userRating;
 
     // ~15% chance to ask for user rating (ground truth)
@@ -196,31 +181,12 @@ class _FlashcardPageState extends State<FlashcardPage> {
       userRating = await _showRatingDialog();
     }
 
-    final log = TelemetryData(
-      wordId: word.id!,
-      sessionId: _sessionId,
-      timestamp: now.millisecondsSinceEpoch,
-      durationMs: durationMs,
-      popupOpened: _popupOpened,
-      popupDurationMs: _popupDurationMs,
-      // actionType: actionType, // Removed from model
-      wordLength: word.word.length,
-      sessionStepIndex: ++_sessionStep,
-      totalViewCount: word.viewCount,
-      hoursSinceLastView: hoursSinceView,
-      currentAlgoScore: score,
-      userRating: userRating,
-    );
-
-    // Fire and forget logging (don't block UI)
-    final logId = await _dbService.logTelemetry(log);
-
-    // If user provided a rating and we have a valid log ID, save it to the Word document
-    if (userRating != null && logId != null) {
-      _dbService.addRatingToWord(word.id!, userRating, logId);
+    // If user provided a rating, save it to the WordStats document
+    if (userRating != null) {
+      _dbService.addRatingToWord(word.id!, word.collectionId, userRating);
     }
 
-    _dbService.updateWordStats(word.id!);
+    _dbService.updateWordStats(word.id!, word.collectionId);
 
     // Reset metrics for next card
     _cardShownTime = DateTime.now();
@@ -612,7 +578,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
                         ),
                       ),
                       child: Text(
-                        word.meaningTr,
+                        word.translation,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 20,
@@ -648,7 +614,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: Text(
-                    "“${word.example}”",
+                    "“${word.contextualInfo}”",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 15,

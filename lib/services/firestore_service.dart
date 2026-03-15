@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:rxdart/rxdart.dart';
 import '../models/collection.dart';
 import '../models/word.dart';
-import '../models/telemetry_data.dart';
-
+import '../models/user_profile.dart';
+import '../models/word_telemetry.dart';
+import 'dart:math';
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -12,251 +14,389 @@ class FirestoreService {
   String? get _userId => _auth.currentUser?.uid;
 
   // =======================================================================
-  // Collections
+  // Users Profile & Subscriptions
   // =======================================================================
 
-  /// Creates a new collection under users/{uid}/collections
-  Future<String> createCollection(String name, bool isGame) async {
+  /// Creates a basic profile for a new user if it doesn't exist.
+  Future<void> createUserProfile() async {
+    final uid = _userId;
+    if (uid == null) return;
+    
+    final docRef = _db.collection('users').doc(uid);
+    final snapshot = await docRef.get();
+    
+    if (!snapshot.exists) {
+      final randomNum = Random().nextInt(90000) + 10000;
+      final username = "user$randomNum";
+      final profile = UserProfile(uid: uid, username: username);
+      await docRef.set(profile.toMap());
+    }
+  }
+
+  /// Retrieves the current user profile (where favorites and subs live)
+  Stream<UserProfile?> getUserProfileStream() {
+    final uid = _userId;
+    if (uid == null) return Stream.value(null);
+
+    return _db.collection('users').doc(uid).snapshots().map((snapshot) {
+      if (!snapshot.exists || snapshot.data() == null) return null;
+      return UserProfile.fromMap(snapshot.data()!);
+    });
+  }
+
+  Future<UserProfile?> getUserProfile() async {
+    final uid = _userId;
+    if (uid == null) return null;
+
+    final snapshot = await _db.collection('users').doc(uid).get();
+    if (!snapshot.exists || snapshot.data() == null) return null;
+    return UserProfile.fromMap(snapshot.data()!);
+  }
+
+  // =======================================================================
+  // Global Collections
+  // =======================================================================
+
+  /// Creates a new collection in the global 'collections' root.
+  Future<String> createCollection(String name, bool isShared) async {
     final uid = _userId;
     if (uid == null) throw Exception("User not logged in");
 
-    final docRef = _db
-        .collection('users')
-        .doc(uid)
-        .collection('collections')
-        .doc();
+    // We MUST make sure the user profile exists before creating a collection
+    await createUserProfile();
+
+    final docRef = _db.collection('collections').doc();
+
+    // Generate a random 6-character alphanumeric share code
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random();
+    final shareCode = String.fromCharCodes(Iterable.generate(
+        6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
 
     final collection = Collection(
       id: docRef.id,
       name: name,
-      isGame: isGame,
-      isFavorite: false,
+      ownerId: uid,
+      isShared: isShared,
+      shareCode: shareCode,
+      createdAt: DateTime.now(),
     );
 
-    // Add 'created_at' for sorting if needed
-    final data = collection.toMap();
-    data['created_at'] = FieldValue.serverTimestamp();
-
-    await docRef.set(data);
+    await docRef.set(collection.toMap());
     return docRef.id;
   }
 
-  /// Get all collections for the current user
-  Stream<List<Collection>> getCollectionsStream() {
+  /// Get ONLY the collections that the user is the explicit owner of
+  Stream<List<Collection>> getMyOwnedCollectionsStream() {
     final uid = _userId;
     if (uid == null) return Stream.value([]);
 
     return _db
-        .collection('users')
-        .doc(uid)
         .collection('collections')
-        .orderBy('is_favorite', descending: true)
+        .where('owner_id', isEqualTo: uid)
         .orderBy('created_at', descending: true)
         .snapshots()
         .map((snapshot) {
           return snapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id; // Ensure ID is set
-            return Collection.fromMap(data);
+            return Collection.fromMap(doc.data(), doc.id);
           }).toList();
         });
   }
 
-  /// Get collections as Future (one-time fetch)
-  Future<List<Collection>> getCollections() async {
+  /// Gets collections where the user is an owner OR has 'editor' role via editor_uids array
+  Stream<List<Collection>> getEditableCollectionsStream() {
     final uid = _userId;
-    if (uid == null) return [];
+    if (uid == null) return Stream.value([]);
+    
+    return Rx.combineLatest2(
+      getMyOwnedCollectionsStream(),
+      _db
+          .collection('collections')
+          .where('editor_uids', arrayContains: uid)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => Collection.fromMap(doc.data(), doc.id)).toList()),
+      (List<Collection> owned, List<Collection> editorSubs) {
+        // Use a set to remove duplicates if somehow one is both owned and an editor (which shouldn't happen)
+        final combinedMap = <String, Collection>{};
+        for (var c in owned) { combinedMap[c.id!] = c; }
+        for (var c in editorSubs) { combinedMap[c.id!] = c; }
+        
+        final combined = combinedMap.values.toList();
+        combined.sort((a, b) {
+          final aTime = a.createdAt ?? DateTime(2000);
+          final bTime = b.createdAt ?? DateTime(2000);
+          return bTime.compareTo(aTime);
+        });
+        return combined;
+      }
+    );
+  }
+  
+  /// Add an editor to a collection by their username
+  Future<String> addEditorByUsername(String collectionId, String targetUsername) async {
+    try {
+      final uid = _userId;
+      if (uid == null) return "Not logged in";
 
-    final snapshot = await _db
-        .collection('users')
-        .doc(uid)
-        .collection('collections')
-        .orderBy('is_favorite', descending: true)
-        .get();
+      // 1. Find user by username
+      final userSnap = await _db.collection('users').where('username', isEqualTo: targetUsername).limit(1).get();
+      if (userSnap.docs.isEmpty) return "User with username '$targetUsername' not found";
 
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
-      data['id'] = doc.id;
-      return Collection.fromMap(data);
+      final targetUid = userSnap.docs.first.id;
+      if (targetUid == uid) return "You cannot add yourself";
+
+      // 2. Add to editor_uids array in the collection
+      await _db.collection('collections').doc(collectionId).update({
+        'editor_uids': FieldValue.arrayUnion([targetUid])
+      });
+      
+      return "Success";
+    } catch (e) {
+      return "Firebase Error: $e";
+    }
+  }
+
+  /// Remove an editor from a collection
+  Future<void> removeEditorFromCollection(String collectionId, String targetUid) async {
+    await _db.collection('collections').doc(collectionId).update({
+      'editor_uids': FieldValue.arrayRemove([targetUid])
+    });
+  }
+
+  /// Gets collections where the user is just a subscriber/reader based on their UserProfile
+  Stream<List<Collection>> getSubscribedCollectionsStream(UserProfile profile) {
+    if (profile.subscribedCollections.isEmpty) return Stream.value([]);
+
+    // Extract raw IDs from the subscription contracts
+    final List<String> subIds = profile.subscribedCollections.map((s) => s.collectionId).toList();
+
+    // Firestore `whereIn` has a limit of 10 items.
+    // We chunk this list to support unlimited subscriptions.
+    final List<List<String>> chunks = [];
+    for (var i = 0; i < subIds.length; i += 10) {
+      chunks.add(subIds.sublist(i, i + 10 > subIds.length ? subIds.length : i + 10));
+    }
+
+    // Create a stream for each chunk
+    final streamList = chunks.map((chunk) {
+      return _db
+          .collection('collections')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .snapshots()
+          .map((snapshot) {
+            return snapshot.docs.map((doc) {
+              return Collection.fromMap(doc.data(), doc.id);
+            });
+          });
     }).toList();
+
+    // Use Rx.combineLatestList to merge all chunk streams into one
+    return Rx.combineLatestList(streamList).map((listOfLists) {
+      return listOfLists.expand((list) => list).toList();
+    });
+  }
+
+  /// Subscribes the current user to a collection using its share code
+  Future<bool> subscribeByShareCode(String shareCode) async {
+    final uid = _userId;
+    if (uid == null) return false;
+
+    try {
+      // 1. Find the PUBLIC collection with this share code.
+      //    ÖNEMLİ: Firestore Kuralları "filter = guard" prensipine göre çalışır.
+      //    `is_shared == true` filtresi olmadan kural motoru sorguyu REDDEDERdi,
+      //    çünkü dönen belgenin is_shared durumunu önceden bilemezdi.
+      final snapshot = await _db
+          .collection('collections')
+          .where('share_code', isEqualTo: shareCode.toUpperCase().trim())
+          .where('is_shared', isEqualTo: true) // ← KURALLARI TATMİN ETMEK İÇİN ŞART
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        return false; // Kod bulunamadı veya koleksiyon private
+      }
+
+      final collectionDoc = snapshot.docs.first;
+      final collectionId = collectionDoc.id;
+      final data = collectionDoc.data();
+
+      // Kendi koleksiyonuna abone olunamazsın
+      if (data['owner_id'] == uid) {
+        return false;
+      }
+
+      // Zaten abone misin? (tekrar eklemeyi önle)
+      final userSnap = await _db.collection('users').doc(uid).get();
+      if (userSnap.exists) {
+        final existingSubs = userSnap.data()?['subscribed_collections'] as List<dynamic>? ?? [];
+        final alreadySubscribed = existingSubs.any(
+          (s) => s is Map<String, dynamic> && s['collection_id'] == collectionId,
+        );
+        if (alreadySubscribed) return true; // Zaten abone, başarılı say
+      }
+
+      // 2. Kullanıcının 'subscribed_collections' dizisine ekle
+      final newSub = SubscribedCollection(
+        collectionId: collectionId,
+        role: 'reader',
+      );
+
+      await _db.collection('users').doc(uid).update({
+        'subscribed_collections': FieldValue.arrayUnion([newSub.toMap()]),
+      });
+
+      return true;
+    } catch (e) {
+      print('[subscribeByShareCode] Error: $e');
+      return false;
+    }
   }
 
   Future<void> updateCollectionName(String id, String newName) async {
-    final uid = _userId;
-    if (uid == null) return;
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('collections')
-        .doc(id)
-        .update({'name': newName});
+    await _db.collection('collections').doc(id).update({'name': newName});
   }
 
-  Future<void> updateCollectionMode(String id, bool isGame) async {
-    final uid = _userId;
-    if (uid == null) return;
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('collections')
-        .doc(id)
-        .update({'is_game': isGame ? 1 : 0});
+  Future<void> updateCollectionVisibility(String id, bool isShared) async {
+    await _db.collection('collections').doc(id).update({'is_shared': isShared});
   }
 
-  Future<void> toggleFavorite(String id, bool currentStatus) async {
+  /// Toggles whether a collection is in the user's FAVORITES array
+  Future<void> toggleFavorite(String id, bool isCurrentlyFavorite) async {
     final uid = _userId;
     if (uid == null) return;
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('collections')
-        .doc(id)
-        .update({'is_favorite': currentStatus ? 0 : 1});
+    
+    final userRef = _db.collection('users').doc(uid);
+    
+    if (isCurrentlyFavorite) {
+      // Remove from favorites
+      await userRef.update({
+        'favorite_collection_ids': FieldValue.arrayRemove([id])
+      });
+    } else {
+      // Add to favorites
+      await userRef.update({
+        'favorite_collection_ids': FieldValue.arrayUnion([id])
+      });
+    }
+  }
+
+  /// Removes a collection from the user's subscribed array
+  Future<void> unsubscribeFromCollection(String collectionId) async {
+    final uid = _userId;
+    if (uid == null) return;
+    
+    final userRef = _db.collection('users').doc(uid);
+    final snapshot = await userRef.get();
+    
+    if (snapshot.exists) {
+      final data = snapshot.data();
+      if (data != null && data.containsKey('subscribed_collections')) {
+        List<dynamic> subs = data['subscribed_collections'];
+        
+        // Find the map where collection_id matches
+        final itemToRemove = subs.firstWhere(
+          (sub) => sub is Map<String, dynamic> && sub['collection_id'] == collectionId, 
+          orElse: () => null
+        );
+        
+        if (itemToRemove != null) {
+          await userRef.update({
+            'subscribed_collections': FieldValue.arrayRemove([itemToRemove])
+          });
+        }
+      }
+    }
   }
 
   Future<void> deleteCollection(String id) async {
-    final uid = _userId;
-    if (uid == null) return;
-
-    // 1. Delete the collection document
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('collections')
-        .doc(id)
-        .delete();
-
-    // 2. Delete all words associated with this collection
-    // Note: This is a client-side batched delete.
-    // For large collections, cloud functions are better, but this is fine for now.
-    final wordsQuery = await _db
-        .collection('users')
-        .doc(uid)
+    // 1. Koleksiyona ait tüm kelimeleri sil (cascade delete)
+    //    Firestore batch maksimum 500 işlem destekler → 500'er parçalara bölerek sil
+    final wordsSnapshot = await _db
         .collection('words')
         .where('collection_id', isEqualTo: id)
         .get();
 
-    final batch = _db.batch();
-    for (var doc in wordsQuery.docs) {
-      batch.delete(doc.reference);
+    const batchLimit = 500;
+    final docs = wordsSnapshot.docs;
+
+    for (int i = 0; i < docs.length; i += batchLimit) {
+      final batch = _db.batch();
+      final chunk = docs.sublist(i, (i + batchLimit).clamp(0, docs.length));
+      for (final doc in chunk) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
     }
-    await batch.commit();
+
+    // 2. Koleksiyon belgesini sil
+    await _db.collection('collections').doc(id).delete();
   }
 
   // =======================================================================
-  // Words
+  // Global Words
   // =======================================================================
 
   Future<String> insertWord(Word word) async {
-    final uid = _userId;
-    if (uid == null) throw Exception("User not logged in");
-
-    final docRef = _db.collection('users').doc(uid).collection('words').doc();
-
-    // Create map and ensuring ID is null so we don't write it yet,
-    // or better, write it if we want redundancy.
+    final docRef = _db.collection('words').doc();
     final data = word.toMap();
-    data.remove('id'); // ID is the document ID
-    data['created_at'] = FieldValue.serverTimestamp();
-
     await docRef.set(data);
     return docRef.id;
   }
 
   Future<List<Word>> getWordsByCollection(String collectionId) async {
-    final uid = _userId;
-    if (uid == null) return [];
+    final snapshot = await _db
+        .collection('words')
+        .where('collection_id', isEqualTo: collectionId)
+        .get(const GetOptions(source: Source.serverAndCache));
 
-    try {
-      // Try fetching from server first to get latest
-      final snapshot = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('words')
-          .where('collection_id', isEqualTo: collectionId)
-          .get(const GetOptions(source: Source.serverAndCache));
-
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return Word.fromMap(data);
-      }).toList();
-    } catch (e) {
-      // If server fails (offline), fall back to cache explicitly if needed,
-      // though serverAndCache handles this mostly.
-      // But purely for robustness:
-      if (e is FirebaseException && e.code == 'unavailable') {
-        final snapshot = await _db
-            .collection('users')
-            .doc(uid)
-            .collection('words')
-            .where('collection_id', isEqualTo: collectionId)
-            .get(const GetOptions(source: Source.cache));
-
-        return snapshot.docs.map((doc) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          return Word.fromMap(data);
-        }).toList();
-      }
-      rethrow;
-    }
+    return snapshot.docs.map((doc) {
+      return Word.fromMap(doc.data(), doc.id);
+    }).toList();
   }
 
   Future<int> getWordCount(String collectionId) async {
-    final uid = _userId;
-    if (uid == null) return 0;
-
     final snapshot = await _db
-        .collection('users')
-        .doc(uid)
         .collection('words')
         .where('collection_id', isEqualTo: collectionId)
         .count()
         .get();
-
     return snapshot.count ?? 0;
   }
 
   Future<void> deleteWord(String id) async {
-    final uid = _userId;
-    if (uid == null) return;
-    await _db.collection('users').doc(uid).collection('words').doc(id).delete();
+    await _db.collection('words').doc(id).delete();
   }
 
-  Future<void> updateWordStats(String wordId) async {
+  // =======================================================================
+  // Personal Telemetry Data (Answer Sheet)
+  // =======================================================================
+
+  Future<void> updateWordStats(String wordId, String collectionId) async {
     final uid = _userId;
     if (uid == null) return;
 
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('words')
-        .doc(wordId)
-        .update({
-          'view_count': FieldValue.increment(1),
-          'last_reviewed_at': DateTime.now().millisecondsSinceEpoch,
-        });
+    final statRef = _db.collection('users').doc(uid).collection('word_stats').doc(wordId);
+    
+    // We use SetOptions(merge: true) because the document might not exist yet
+    await statRef.set({
+      'collection_id': collectionId,
+      'view_count': FieldValue.increment(1),
+      'last_reviewed_at': DateTime.now().millisecondsSinceEpoch,
+    }, SetOptions(merge: true));
   }
 
-  Future<void> addRatingToWord(String wordId, int rating, String logId) async {
+  Future<void> addRatingToWord(String wordId, String collectionId, int rating) async {
     final uid = _userId;
     if (uid == null) return;
 
-    final ratingData = {
-      'rating': rating,
-      'log_id': logId,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
+    final statRef = _db.collection('users').doc(uid).collection('word_stats').doc(wordId);
 
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('words')
-        .doc(wordId)
-        .update({
-          'user_ratings': FieldValue.arrayUnion([ratingData]),
-        });
+    // Again, merge in case the user has never viewed this word before but is rating it
+    await statRef.set({
+      'collection_id': collectionId,
+      'my_ratings': FieldValue.arrayUnion([rating]),
+    }, SetOptions(merge: true));
   }
 
   // =======================================================================
@@ -273,8 +413,6 @@ class FirestoreService {
     // For now, assume exact match or handle client side (inefficient).
     // Let's rely on exact match for existing logic or adding a normalized field later.
     final snapshot = await _db
-        .collection('users')
-        .doc(uid)
         .collection('words')
         .where('word', isEqualTo: word)
         .limit(1)
@@ -283,17 +421,11 @@ class FirestoreService {
     return snapshot.docs.isNotEmpty;
   }
 
-  Future<bool> wordAndMeaningExists(String word, String meaningTr) async {
-    final uid = _userId;
-    if (uid == null) return false;
-
-    // Basic check for exact match on both
+  Future<bool> wordAndMeaningExists(String word, String definition) async {
     final snapshot = await _db
-        .collection('users')
-        .doc(uid)
         .collection('words')
         .where('word', isEqualTo: word)
-        .where('meaning_tr', isEqualTo: meaningTr)
+        .where('definition', isEqualTo: definition)
         .limit(1)
         .get();
 
@@ -302,138 +434,57 @@ class FirestoreService {
 
   // =======================================================================
   // Missing Methods for UI Compatibility
-  // =======================================================================
 
   Future<void> updateWord(Word word) async {
-    final uid = _userId;
-    if (uid == null || word.id == null) return;
+    if (word.id == null) return;
 
     // Convert to map and remove ID (it's the doc key)
     final data = word.toMap();
-    data.remove('id');
 
     await _db
-        .collection('users')
-        .doc(uid)
         .collection('words')
         .doc(word.id)
         .update(data);
   }
 
-  /// Basic client-side search because Firestore doesn't support substring search natively.
-  /// For production, use Algolia/Typesense. For this scale, fetch all or collection-based fetch is okay.
+  /// Kelime araması — her zaman caller'dan gelen collectionIds ile çalışır.
+  /// search_page.dart bu ID'leri stream üzerinden önbelleğe alır (0 ekstra Firestore isteği).
+  /// collectionIds boşsa hiç sorgu atılmaz.
   Future<List<Word>> searchWords(
     String query, {
-    List<String>? collectionIds,
+    required List<String> collectionIds,
   }) async {
-    final uid = _userId;
-    if (uid == null) return [];
+    if (collectionIds.isEmpty) return [];
 
-    Query queryRef = _db.collection('users').doc(uid).collection('words');
+    // ─── Kelimeleri çek (whereIn max 30 — 30'ar parçalara böl) ─────────────
+    List<Word> allWords = [];
+    const chunkSize = 30;
 
-    // If specific collections selected, strictly we can use 'whereIn' if list < 10
-    if (collectionIds != null && collectionIds.isNotEmpty) {
-      if (collectionIds.length <= 10) {
-        queryRef = queryRef.where('collection_id', whereIn: collectionIds);
-      } else {
-        // Fallback: fetch all and filter client side if list is huge (unlikely here)
-        // For now, let's just not filter by collection in query if list is large
-      }
+    for (int i = 0; i < collectionIds.length; i += chunkSize) {
+      final chunk = collectionIds.sublist(
+        i,
+        (i + chunkSize).clamp(0, collectionIds.length),
+      );
+      final snap = await _db
+          .collection('words')
+          .where('collection_id', whereIn: chunk)
+          .get();
+      allWords.addAll(
+        snap.docs.map((doc) => Word.fromMap(doc.data() as Map<String, dynamic>, doc.id)),
+      );
     }
 
-    final snapshot = await queryRef.get();
-
-    final allWords = snapshot.docs.map((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      data['id'] = doc.id;
-      return Word.fromMap(data);
-    }).toList();
-
+    // ─── Client-side text filtresi ──────────────────────────────────────────
     if (query.isEmpty) return allWords;
 
     final lowerQ = query.toLowerCase();
     return allWords.where((w) {
-      // Manual Filter for large collection lists if whereIn wasn't used
-      if (collectionIds != null &&
-          collectionIds.isNotEmpty &&
-          collectionIds.length > 10) {
-        if (!collectionIds.contains(w.collectionId)) return false;
-      }
-
       return w.word.toLowerCase().contains(lowerQ) ||
-          w.meaningTr.toLowerCase().contains(lowerQ) ||
-          w.definition.toLowerCase().contains(lowerQ);
+          w.definition.toLowerCase().contains(lowerQ) ||
+          w.translation.toLowerCase().contains(lowerQ);
     }).toList();
   }
 
-  Future<Map<String, int>> importWordsWithDeduplication(
-    String collectionId,
-    List<dynamic> jsonList,
-  ) async {
-    final uid = _userId;
-    if (uid == null) return {'inserted': 0, 'skipped': 0};
-
-    int inserted = 0;
-    int skipped = 0;
-
-    final batch = _db.batch();
-    // Firestore allows max 500 writes per batch. For now assume list is small or we strictly commit every 500.
-    // For simplicity, do one by one or small batches.
-
-    for (var item in jsonList) {
-      if (item is! Map<String, dynamic>) continue;
-
-      String wordText = item['word'] ?? '';
-      if (wordText.isEmpty) continue;
-
-      // Check existence (inefficient loop but safe)
-      bool exists = await wordExists(wordText);
-      if (exists) {
-        skipped++;
-        continue;
-      }
-
-      final docRef = _db.collection('users').doc(uid).collection('words').doc();
-      final word = Word(
-        collectionId: collectionId,
-        word: wordText,
-        definition: item['definition'] ?? '',
-        meaningTr: item['meaning_tr'] ?? '',
-        example: item['example'] ?? '',
-        id: null, // docRef.id
-      );
-
-      final data = word.toMap();
-      data.remove('id');
-      data['created_at'] = FieldValue.serverTimestamp();
-
-      batch.set(docRef, data);
-      inserted++;
-    }
-
-    if (inserted > 0) {
-      await batch.commit();
-    }
-
-    return {'inserted': inserted, 'skipped': skipped};
-  }
-
-  Future<String?> logTelemetry(TelemetryData log) async {
-    final uid = _userId;
-    if (uid == null) return null;
-
-    // Logs are write-only usually, but let's store them
-    final docRef = await _db
-        .collection('users')
-        .doc(uid)
-        .collection('logs')
-        .add(log.toMap());
-
-    // Update streak when telemetry is logged (meaning user studied a card)
-    await updateUserStreak();
-
-    return docRef.id;
-  }
 
   // =======================================================================
   // Streaks
