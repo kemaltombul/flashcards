@@ -9,17 +9,14 @@ import '../services/firestore_service.dart';
 import '../services/scoring_service.dart';
 import '../models/word.dart';
 
-/// Displays flashcards for a collection, supporting both study and game modes.
 class FlashcardPage extends StatefulWidget {
   final String collectionId;
   final String collectionName;
-  final bool isGame;
 
   const FlashcardPage({
     super.key,
     required this.collectionId,
     required this.collectionName,
-    required this.isGame,
   });
 
   @override
@@ -27,7 +24,6 @@ class FlashcardPage extends StatefulWidget {
 }
 
 class _FlashcardPageState extends State<FlashcardPage> {
-  // Background Images
   final List<String> _backgroundImages = [
     'assets/images/bg1.jpg',
     'assets/images/bg2.jpg',
@@ -39,6 +35,8 @@ class _FlashcardPageState extends State<FlashcardPage> {
     'assets/images/bg8.jpg',
     'assets/images/bg9.jpg',
     'assets/images/bg10.jpg',
+    'assets/images/bg11.jpg',
+    'assets/images/bg12.jpg',
   ];
 
   String _currentBackground = 'assets/images/bg1.jpg';
@@ -54,21 +52,19 @@ class _FlashcardPageState extends State<FlashcardPage> {
   Timer? _timer;
   bool _showMeaning = false;
 
-  // Telemetry Tracking
   final ScoringService _scoringService = ScoringService();
   late DateTime _cardShownTime;
   DateTime? _popupOpenTime;
   int _popupDurationMs = 0;
   bool _popupOpened = false;
-  int _sessionStep = 0; // Incremented per card view
-  late String _sessionId; // Random session ID to group logs
+  int _sessionStep = 0;
+  late String _sessionId;
 
   @override
   void initState() {
     super.initState();
-    _sessionId = DateTime.now().millisecondsSinceEpoch
-        .toString(); // Unique session ID
-    _cardShownTime = DateTime.now(); // Start tracking first card
+    _sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+    _cardShownTime = DateTime.now();
 
     if (_backgroundImages.isNotEmpty) {
       _currentBackground =
@@ -96,7 +92,6 @@ class _FlashcardPageState extends State<FlashcardPage> {
     }
   }
 
-  /// Selects a random background image different from the current one.
   void _pickRandomBackground() {
     if (_backgroundImages.isNotEmpty) {
       setState(() {
@@ -120,15 +115,16 @@ class _FlashcardPageState extends State<FlashcardPage> {
     super.dispose();
   }
 
-  /// Loads words for the collection from the database.
   Future<void> _initializeData() async {
     try {
       _words = await _dbService.getWordsByCollection(widget.collectionId);
       _isLoading = false;
+
       if (mounted) {
         setState(() {});
-        if (_words.isNotEmpty && !widget.isGame) {
+        if (_words.isNotEmpty) {
           _startTimer();
+          _dbService.updateUserStreak();
         }
       }
     } catch (e) {
@@ -138,10 +134,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
     }
   }
 
-  /// Starts a 15-second timer to reveal the meaning (Study Mode only).
   void _startTimer() {
-    if (widget.isGame) return;
-
     _timer?.cancel();
     setState(() {
       _showMeaning = false;
@@ -154,117 +147,171 @@ class _FlashcardPageState extends State<FlashcardPage> {
     });
   }
 
-  /// Logs telemetry data for the current card before switching.
-  Future<void> _logCardData(String actionType) async {
+  Future<void> _logCardData(String actionType, {int? userRating}) async {
     if (_words.isEmpty) return;
 
     final word = _words[_currentIndex];
     final now = DateTime.now();
     int durationMs = now.difference(_cardShownTime).inMilliseconds;
+    if (durationMs > 45000) durationMs = 45000;
 
-    // Cap duration at 45 seconds (45000 ms)
-    if (durationMs > 45000) {
-      durationMs = 45000;
-    }
-
-    // Calculate popup duration if it was opened
     if (_popupOpened && _popupOpenTime != null) {
       _popupDurationMs = now.difference(_popupOpenTime!).inMilliseconds;
     }
 
-    // Calculate score
-    int? userRating;
-
-    // ~15% chance to ask for user rating (ground truth)
-    // Only if action is 'next' (meaning they likely 'answered' it) and not just browsing back
-    if (actionType == 'next' && Random().nextDouble() < 0.15) {
-      userRating = await _showRatingDialog();
-    }
-
-    // If user provided a rating, save it to the WordStats document
     if (userRating != null) {
       _dbService.addRatingToWord(word.id!, word.collectionId, userRating);
     }
 
-    _dbService.updateWordStats(word.id!, word.collectionId);
+    _dbService.updateWordStats(
+      word.id!,
+      word.collectionId,
+      durationMs: durationMs,
+    );
 
-    // Reset metrics for next card
+    // Reset metrics
     _cardShownTime = DateTime.now();
     _popupOpened = false;
     _popupDurationMs = 0;
   }
 
-  /// Shows a quick rating dialog for ground truth collection.
   Future<int?> _showRatingDialog() async {
     return showDialog<int>(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text(
-          "How well do you know this?",
-          style: TextStyle(color: Colors.white, fontSize: 18),
-        ),
-        content: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(6, (index) {
-            int rating = index + 1;
-            return GestureDetector(
-              onTap: () => Navigator.pop(context, rating),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.deepPurpleAccent.withValues(
-                    alpha: 0.2 + (index * 0.1),
-                  ), // Darker for higher ratings
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  "$rating",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1.2,
                 ),
               ),
-            );
-          }),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const SizedBox(width: 40),
+                      const Expanded(
+                        child: Text(
+                          "How well do you know this?",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close,
+                            color: Colors.white60, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: List.generate(6, (index) {
+                      int rating = index + 1;
+                      return GestureDetector(
+                        onTap: () => Navigator.pop(context, rating),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.deepPurpleAccent.withValues(
+                              alpha: 0.15 + (index * 0.1),
+                            ),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.1),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            "$rating",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Struggling",
+                          style:
+                              TextStyle(color: Colors.white38, fontSize: 10)),
+                      Text("Mastered",
+                          style:
+                              TextStyle(color: Colors.white38, fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  /// Advances to the next card in the list.
-  void _nextCard() {
-    _logCardData('next'); // Fire and forget
+  Future<void> _nextCard() async {
+    int? userRating;
+
+    if (Random().nextDouble() < 0.15) {
+      userRating = await _showRatingDialog();
+      if (!mounted) return;
+    }
+
+    await _logCardData('next', userRating: userRating);
 
     setState(() {
       _showMeaning = false;
-
-      if (_currentIndex < _words.length - 1) {
-        _currentIndex++;
-      } else {
-        _currentIndex = 0;
-      }
-
+      _currentIndex = _currentIndex < _words.length - 1
+          ? _currentIndex + 1
+          : 0;
       _pickRandomBackground();
-
-      if (!widget.isGame) _startTimer();
+      _startTimer();
     });
   }
 
-  /// Returns to the previous card.
-  void _prevCard() {
-    _logCardData('prev'); // Fire and forget
+  Future<void> _prevCard() async {
+    if (_currentIndex <= 0) return;
 
-    if (_currentIndex > 0) {
-      setState(() {
-        _showMeaning = false;
-        _currentIndex--;
-        _pickRandomBackground();
-        if (!widget.isGame) _startTimer();
-      });
-    }
+    await _logCardData('prev');
+
+    setState(() {
+      _showMeaning = false;
+      _currentIndex--;
+      _pickRandomBackground();
+      _startTimer();
+    });
   }
 
   @override
@@ -477,25 +524,15 @@ class _FlashcardPageState extends State<FlashcardPage> {
     }
   }
 
-  /// Builds the glassmorphism card displaying the word.
   Widget _buildGlassCard(Word word) {
     return GestureDetector(
       onTap: () {
-        if (!widget.isGame && !_showMeaning) {
+        if (!_showMeaning) {
           _timer?.cancel();
-          // Telemetry: Track popup open
           _popupOpened = true;
           _popupOpenTime = DateTime.now();
-
-          setState(() {
-            _showMeaning = true;
-          });
-
-          // Since meaning is now shown until card change, we can approximate duration
-          // as "until next card" (calculated in _logCardData) or we can just say
-          // looking at definition counts as usage time.
-          // For now, let's assume they look at it until they leave the card.
-          _popupDurationMs = 0; // Will be calculated on exit
+          setState(() => _showMeaning = true);
+          _popupDurationMs = 0;
         }
       },
       child: ClipRRect(
@@ -559,52 +596,50 @@ class _FlashcardPageState extends State<FlashcardPage> {
                 ),
                 const SizedBox(height: 20),
 
-                if (!widget.isGame) ...[
-                  AnimatedOpacity(
-                    duration: _showMeaning
-                        ? const Duration(milliseconds: 500)
-                        : Duration.zero,
-                    opacity: _showMeaning ? 1.0 : 0.0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
+                AnimatedOpacity(
+                  duration: _showMeaning
+                      ? const Duration(milliseconds: 500)
+                      : Duration.zero,
+                  opacity: _showMeaning ? 1.0 : 0.0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurpleAccent.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.5),
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurpleAccent.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      child: Text(
-                        word.translation,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ),
+                    child: Text(
+                      word.translation,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
+                ),
 
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 300),
-                    opacity: _showMeaning ? 0.0 : 1.0,
-                    child: const Padding(
-                      padding: EdgeInsets.only(top: 6.0),
-                      child: Text(
-                        "Tap to reveal / Waiting...",
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 11,
-                          fontStyle: FontStyle.italic,
-                        ),
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: _showMeaning ? 0.0 : 1.0,
+                  child: const Padding(
+                    padding: EdgeInsets.only(top: 6.0),
+                    child: Text(
+                      "Tap to reveal / Waiting...",
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
                   ),
-                ],
+                ),
 
                 const SizedBox(height: 20),
                 Container(
@@ -614,7 +649,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: Text(
-                    "“${word.contextualInfo}”",
+                    "\u201c${word.contextualInfo}\u201d",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 15,

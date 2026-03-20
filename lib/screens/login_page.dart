@@ -42,7 +42,7 @@ class _LoginPageState extends State<LoginPage> {
               const Icon(Icons.style, size: 80, color: Colors.deepPurple),
               const SizedBox(height: 24),
               Text(
-                'English Flashcards',
+                'True Vocab',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Colors.deepPurple,

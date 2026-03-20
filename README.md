@@ -1,8 +1,8 @@
-# English Flashcards
+# True Vocab
 
 ![Flutter Version](https://img.shields.io/badge/Flutter-3.19-02569B?logo=flutter) ![Dart Version](https://img.shields.io/badge/Dart-3.0-0175C2?logo=dart) ![License](https://img.shields.io/badge/License-MIT-green) ![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20Web-lightgrey)
 
-**English Flashcards** is a sleek, modern, dark-themed vocabulary learning application built with Flutter. It focuses on simplicity and efficiency, helping you master new words through active recall and gamified learning modes.
+**True Vocab** is a sleek, modern, dark-themed vocabulary learning application built with Flutter. It focuses on simplicity and efficiency, helping you master new words through active recall and gamified learning modes.
 
 ---
 

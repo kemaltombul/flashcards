@@ -9,174 +9,221 @@ import '../models/user_profile.dart';
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
+  static const _email    = 'kemaltombull@hotmail.com';
+  static const _github   = 'https://github.com/kemaltombul';
+  static const _linkedin = 'https://www.linkedin.com/in/kemal-tombul-802385200/';
+
+  static const _bg     = Color(0xFF121212);
+  static const _card   = Color(0xFF1E1E1E);
+  static const _accent = Color(0xFFD0BCFF);
+  static const _ts     = TextStyle(color: Colors.white, fontFamily: 'Roboto');
+
+  Future<void> _launch(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _sendMail() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _email,
+      queryParameters: {'subject': 'True Vocab — Feedback'},
+    );
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final AuthService authService = AuthService();
-    final FirestoreService dbService = FirestoreService();
-    final User? user = authService.currentUser;
-
-    // Zen Colors
-    const Color backgroundColor = Color(0xFF121212);
-    const Color cardColor = Color(0xFF1E1E1E);
-    const Color accentColor = Color(0xFFD0BCFF);
-    const TextStyle textStyle = TextStyle(color: Colors.white, fontFamily: 'Roboto');
+    final auth = AuthService();
+    final db   = FirestoreService();
+    final user = auth.currentUser;
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: _bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text("Profile", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w300)),
+        title: const Text('Profile',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w300)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.white70, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: StreamBuilder<UserProfile?>(
-        stream: dbService.getUserProfileStream(),
-        builder: (context, snapshot) {
-          final profile = snapshot.data;
-          
+        stream: db.getUserProfileStream(),
+        builder: (context, profileSnapshot) {
+          final profile = profileSnapshot.data;
+
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Avatar
+                // ── Avatar ──────────────────────────────
                 CircleAvatar(
                   radius: 50,
-                  backgroundColor: accentColor.withOpacity(0.1),
+                  backgroundColor: _accent.withOpacity(0.1),
                   child: Text(
-                    (user?.displayName ?? profile?.username ?? "U")[0].toUpperCase(),
-                    style: const TextStyle(fontSize: 40, color: accentColor, fontWeight: FontWeight.w200),
+                    (user?.displayName ?? profile?.username ?? 'U')[0].toUpperCase(),
+                    style: const TextStyle(
+                        fontSize: 40, color: _accent, fontWeight: FontWeight.w200),
                   ),
                 ),
                 const SizedBox(height: 24),
-                
-                // User Details
+
                 Text(
-                  user?.displayName ?? profile?.username ?? "Anonymous",
-                  style: textStyle.copyWith(fontSize: 24, fontWeight: FontWeight.bold),
+                  user?.displayName ?? profile?.username ?? 'Anonymous',
+                  style: _ts.copyWith(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 if (user?.email != null) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    user!.email!,
-                    style: textStyle.copyWith(fontSize: 14, color: Colors.white60),
-                  ),
+                  Text(user!.email!,
+                      style: _ts.copyWith(fontSize: 14, color: Colors.white60)),
                 ],
-                if (profile?.username != null) ...[
-                  const SizedBox(height: 8),
+                const SizedBox(height: 16),
+
+                // ── Username pill ────────────────────────
+                if (profile?.username != null)
                   GestureDetector(
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: profile!.username!));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text("ID copied!", style: TextStyle(color: Colors.black)),
-                            backgroundColor: accentColor,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      }
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: const Text('ID copied!',
+                            style: TextStyle(color: Colors.black)),
+                        backgroundColor: _accent,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ));
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.1),
+                        color: _accent.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _accent.withOpacity(0.2)),
                       ),
-                      child: Text(
-                        "ID: ${profile!.username}",
-                        style: const TextStyle(fontSize: 12, color: accentColor, fontWeight: FontWeight.bold),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.copy_rounded, size: 14, color: _accent),
+                          const SizedBox(width: 8),
+                          Text('@${profile!.username}',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: _accent,
+                                  fontWeight: FontWeight.w600)),
+                        ],
                       ),
                     ),
                   ),
-                ],
-                
+
                 const SizedBox(height: 40),
-                
-                // Stats Card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+
+                // ── Stats ────────────────────────────────
+                Row(children: [
+                  Expanded(
+                    child: StreamBuilder<int>(
+                      stream: db.getUserStreakStream(),
+                      builder: (ctx, s) => _statCard(
+                        'Day Streak', s.data?.toString() ?? '0',
+                        Icons.local_fire_department_rounded, Colors.orangeAccent),
+                    ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildStat("Subscribed", profile?.subscribedCollections.length ?? 0),
-                      Container(height: 30, width: 1, color: Colors.white10),
-                      _buildStat("Favorites", profile?.favoriteCollectionIds.length ?? 0),
-                    ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _statCard(
+                      'Cards Reviewed',
+                      (profile?.totalCardsReviewed ?? 0).toString(),
+                      Icons.style_rounded, _accent),
                   ),
-                ),
-                
-                const SizedBox(height: 40),
-                
-                // Actions
-                _buildActionTile(
-                  icon: Icons.code_rounded,
-                  title: "GitHub / kemaltombul",
-                  onTap: () async {
-                    final Uri url = Uri.parse('https://github.com/kemaltombul');
-                    if (await canLaunchUrl(url)) {
-                      await launchUrl(url, mode: LaunchMode.externalApplication);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                _buildActionTile(
-                  icon: Icons.alternate_email_rounded,
-                  title: "Contact Developer",
-                  onTap: () async {
-                    final Uri emailLaunchUri = Uri(
-                      scheme: 'mailto',
-                      path: 'kemaltombull@hotmail.com',// replace with real email if known or keep generic
-                      query: encodeQueryParameters(<String, String>{
-                        'subject': 'English Flashcards Feedback',
-                      }),
-                    );
-                    if (await canLaunchUrl(emailLaunchUri)) {
-                      await launchUrl(emailLaunchUri);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                _buildActionTile(
+                ]),
+                const SizedBox(height: 16),
+                Builder(builder: (_) {
+                  final ms      = profile?.totalStudyTimeMs ?? 0;
+                  final hours   = (ms / 3600000).floor();
+                  final minutes = ((ms % 3600000) / 60000).floor();
+                  return _statCard(
+                    'Total Study Time',
+                    hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m',
+                    Icons.timer_rounded, Colors.lightBlueAccent,
+                    isFullWidth: true);
+                }),
+
+                const SizedBox(height: 48),
+
+                // ── Actions ──────────────────────────────
+                _actionTile(
                   icon: Icons.logout_rounded,
-                  title: "Logout",
+                  title: 'Logout session',
                   color: Colors.redAccent,
                   onTap: () async {
-                    bool? confirm = await showDialog<bool>(
+                    final confirm = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        backgroundColor: cardColor,
-                        title: const Text("Logout", style: TextStyle(color: Colors.white)),
-                        content: const Text("Are you sure you want to log out?"),
+                        backgroundColor: _card,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        title: const Text('Logout',
+                            style: TextStyle(color: Colors.white)),
+                        content: const Text('Are you sure you want to log out?',
+                            style: TextStyle(color: Colors.white70)),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text("Cancel", style: TextStyle(color: Colors.white60)),
-                          ),
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel',
+                                  style: TextStyle(color: Colors.white60))),
                           TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text("Logout", style: TextStyle(color: Colors.redAccent)),
-                          ),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Logout',
+                                  style: TextStyle(color: Colors.redAccent))),
                         ],
                       ),
                     );
-
                     if (confirm == true) {
-                      authService.signOut();
+                      auth.signOut();
                       if (context.mounted) {
-                        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                        Navigator.of(context)
+                            .pushNamedAndRemoveUntil('/', (r) => false);
                       }
                     }
                   },
                 ),
+
+                const SizedBox(height: 48),
+
+                // ── Contact ──────────────────────────────
+                _sectionLabel('Get in touch'),
+                const SizedBox(height: 12),
+                _contactTile(
+                  icon: Icons.mail_outline_rounded,
+                  title: 'Send feedback',
+                  subtitle: _email,
+                  color: _accent,
+                  onTap: _sendMail,
+                ),
+                const SizedBox(height: 10),
+                _contactTile(
+                  icon: Icons.code_rounded,
+                  title: 'GitHub',
+                  subtitle: 'github.com/kemaltombul',
+                  color: Colors.white70,
+                  onTap: () => _launch(_github),
+                ),
+                const SizedBox(height: 10),
+                _contactTile(
+                  icon: Icons.work_outline_rounded,
+                  title: 'LinkedIn',
+                  subtitle: 'kemal-tombul',
+                  color: const Color(0xFF6B9FD4),
+                  onTap: () => _launch(_linkedin),
+                ),
+                const SizedBox(height: 32),
               ],
             ),
           );
@@ -185,23 +232,47 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildStat(String label, int count) {
-    return Column(
-      children: [
-        Text(
-          count.toString(),
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: Colors.white38),
-        ),
-      ],
+  Widget _sectionLabel(String label) => Align(
+        alignment: Alignment.centerLeft,
+        child: Text(label,
+            style: const TextStyle(
+                color: Colors.white38, fontSize: 12, letterSpacing: 1)),
+      );
+
+  Widget _statCard(String label, String value, IconData icon, Color color,
+      {bool isFullWidth = false}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            isFullWidth ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: isFullWidth
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(label,
+                  style: const TextStyle(fontSize: 12, color: Colors.white38)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+        ],
+      ),
     );
   }
 
-  Widget _buildActionTile({
+  Widget _actionTile({
     required IconData icon,
     required String title,
     required VoidCallback onTap,
@@ -211,34 +282,69 @@ class ProfilePage extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: Colors.white.withOpacity(0.05)),
+            color: color.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.1)),
           ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 16),
-              Text(
-                title,
-                style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w400),
-              ),
-              const Spacer(),
-              Icon(Icons.arrow_forward_ios_rounded, color: color.withOpacity(0.3), size: 14),
-            ],
-          ),
+          child: Row(children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 16),
+            Text(title,
+                style: TextStyle(
+                    color: color, fontSize: 16, fontWeight: FontWeight.w500)),
+            const Spacer(),
+            Icon(Icons.arrow_forward_ios_rounded,
+                color: color.withOpacity(0.3), size: 14),
+          ]),
         ),
       ),
     );
   }
 
-  String? encodeQueryParameters(Map<String, String> params) {
-    return params.entries
-        .map((MapEntry<String, String> e) =>
-            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
-        .join('&');
+  Widget _contactTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color color = Colors.white70,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.1)),
+          ),
+          child: Row(children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        color: color, fontSize: 15, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: TextStyle(
+                        color: color.withOpacity(0.5), fontSize: 12)),
+              ],
+            ),
+            const Spacer(),
+            Icon(Icons.open_in_new_rounded,
+                color: color.withOpacity(0.3), size: 14),
+          ]),
+        ),
+      ),
+    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
+import 'firestore_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -33,7 +34,12 @@ class AuthService {
       );
 
       // Once signed in, return the UserCredential
-      return await _auth.signInWithCredential(credential);
+      final userCredential = await _auth.signInWithCredential(credential);
+      
+      // Create user profile immediately upon successful login
+      await FirestoreService().createUserProfile();
+      
+      return userCredential;
     } catch (e) {
       if (kDebugMode) {
         print("Error during Google Sign-In: $e");

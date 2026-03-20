@@ -22,11 +22,12 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize specific background if provided, else assign a random one
-    _bgImage = widget.initialBgImage ?? 'assets/images/bg${(DateTime.now().millisecond % 10) + 1}.jpg';
+    _bgImage = widget.initialBgImage ??
+        'assets/images/bg${(DateTime.now().millisecond % 12) + 1}.jpg';
   }
 
   void _onItemTapped(int index) {
+    FocusManager.instance.primaryFocus?.unfocus(); // ✅ Alt bar ile geçişte de kapanır
     setState(() {
       _currentIndex = index;
     });
@@ -38,6 +39,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   void _onPageChanged(int index) {
+    FocusManager.instance.primaryFocus?.unfocus(); // ✅ Kaydırarak geçişte kapanır
     setState(() {
       _currentIndex = index;
     });
@@ -45,19 +47,18 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Glassmorphism Theme Colors
-    final navBarColor = Colors.black.withOpacity(0.3); // Soft dark glass
+    final navBarColor = Colors.black.withOpacity(0.3);
     final selectedItemColor = const Color(0xFFD0BCFF);
     final unselectedItemColor = Colors.white54;
 
     return Scaffold(
-      backgroundColor: Colors.black, // Base color
-      resizeToAvoidBottomInset: false, // Prevents the background from resizing/moving when keyboard opens
+      backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // Parallax Background Image
+          // Parallax Background
           Positioned(
-            left: -50, // Extra space for parallax movement
+            left: -50,
             right: -50,
             top: 0,
             bottom: 0,
@@ -65,11 +66,12 @@ class _MainPageState extends State<MainPage> {
               animation: _pageController,
               builder: (context, child) {
                 double pageOffset = 0.0;
-                if (_pageController.hasClients && _pageController.position.haveDimensions) {
+                if (_pageController.hasClients &&
+                    _pageController.position.haveDimensions) {
                   pageOffset = _pageController.page ?? 0.0;
                 }
                 return Transform.translate(
-                  offset: Offset(-pageOffset * 40, 0), // Parallax effect
+                  offset: Offset(-pageOffset * 40, 0),
                   child: child,
                 );
               },
@@ -91,26 +93,25 @@ class _MainPageState extends State<MainPage> {
           PageView(
             controller: _pageController,
             onPageChanged: _onPageChanged,
-            physics: const BouncingScrollPhysics(), // Smooth swiping
+            physics: const BouncingScrollPhysics(),
             children: _pages,
           ),
         ],
       ),
-      // Floating Glass Navigation Bar
-      extendBody: true, // Allows content to go behind the bottom bar
+      extendBody: true,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(
-            top: BorderSide(color: Colors.white.withOpacity(0.1), width: 0.5),
-          ), // Soft border
-          color: Colors.transparent, // Let blur show through
+            top: BorderSide(
+              color: Colors.white.withOpacity(0.1),
+              width: 0.5,
+            ),
+          ),
+          color: Colors.transparent,
         ),
         child: ClipRRect(
           child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: 8,
-              sigmaY: 8,
-            ), // Lowered blur for better performance
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
             child: NavigationBarTheme(
               data: NavigationBarThemeData(
                 indicatorColor: selectedItemColor.withOpacity(0.2),

@@ -28,7 +28,11 @@ class Collection {
   /// Editörlerin (Ortakların) kullanıcı ID'lerini (UID) tutar.
   final List<String> editorUids;  
   
-  /// Koleksiyonun ne zaman oluşturulduğu (Sıralama için gerekli)
+  /// AI ÜRETİM MODU (Bağlam Tipi)
+  /// Kelime üretilirken AI'ın neye odaklanacağını belirler:
+  /// 'Academy', 'Cinema', 'Mnemonic', 'Practical'
+  final String contextType;
+
   final DateTime? createdAt;
 
   Collection({
@@ -38,6 +42,7 @@ class Collection {
     this.isShared = false,
     this.shareCode,
     this.editorUids = const [],
+    this.contextType = 'Academy',
     this.createdAt,
   });
 
@@ -49,6 +54,7 @@ class Collection {
       'is_shared': isShared,
       'share_code': shareCode,
       'editor_uids': editorUids,
+      'context_type': contextType,
       'created_at': createdAt?.millisecondsSinceEpoch,
     };
   }
@@ -62,6 +68,7 @@ class Collection {
       isShared: map['is_shared'] ?? false,
       shareCode: map['share_code'],
       editorUids: List<String>.from(map['editor_uids'] ?? []),
+      contextType: map['context_type'] ?? 'Academy',
       createdAt: map['created_at'] != null 
           ? DateTime.fromMillisecondsSinceEpoch(map['created_at']) 
           : null,

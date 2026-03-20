@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/ai_service.dart';
 import '../services/firestore_service.dart';
-
 import '../models/word.dart';
 import '../widgets/collection_selector.dart';
 
@@ -23,23 +22,24 @@ class _ScanDialogState extends State<ScanDialog> {
   File? _image;
   bool _isAnalyzing = false;
   bool _isProcessing = false;
+
   List<Map<String, String>> _detectedWords = [];
   final Set<int> _selectedIndices = {};
 
+  String _globalContextType = 'Academy';
   String? _selectedCollectionId;
 
   final ImagePicker _picker = ImagePicker();
 
-  // Colors (matching app theme)
-  final Color _backgroundColor = const Color(
-    0xFF1E1E1E,
-  ); // Slightly lighter for dialog
+  final Color _backgroundColor = const Color(0xFF1E1E1E);
   final Color _cardColor = const Color(0xFF2C2C2C);
   final Color _accentColor = const Color(0xFFBB86FC);
-  final TextStyle _textStyle = const TextStyle(
-    fontFamily: 'Roboto',
-    color: Colors.white,
-  );
+
+  static const _modes = [
+    {'id': 'Academy',   'icon': Icons.school_outlined,    'label': 'Academy'},
+    {'id': 'Cinema',    'icon': Icons.movie_outlined,      'label': 'Cinema'},
+    {'id': 'Practical', 'icon': Icons.chat_bubble_outline, 'label': 'Practical'},
+  ];
 
   @override
   void initState() {
@@ -47,8 +47,7 @@ class _ScanDialogState extends State<ScanDialog> {
     _selectedCollectionId = widget.preselectedCollectionId;
   }
 
-  // ... (keeping methods like _loadCollections, _pickImage, _analyzeImage, _processWords same,
-  // ensuring to check mounted before using context)
+  // ── Image ───────────────────────────────────
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -64,9 +63,8 @@ class _ScanDialogState extends State<ScanDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error picking image: $e")));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error picking image: $e")));
       }
     }
   }
@@ -76,70 +74,68 @@ class _ScanDialogState extends State<ScanDialog> {
       final words = await _aiService.extractWordsFromImage(imageFile);
       if (mounted) {
         if (words.isEmpty) {
-          setState(() {
-            _isAnalyzing = false;
-          });
+          setState(() => _isAnalyzing = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("No underlined or highlighted words found found."),
+              content: Text("No underlined or highlighted words found."),
               backgroundColor: Colors.orange,
             ),
           );
         } else {
           setState(() {
             _detectedWords = words;
-            _selectedIndices.addAll(Iterable.generate(words.length)); // Select all by default
+            _selectedIndices.addAll(Iterable.generate(words.length));
             _isAnalyzing = false;
           });
         }
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isAnalyzing = false;
-        });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("AI Analysis failed: $e")));
+        setState(() => _isAnalyzing = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("AI Analysis failed: $e")));
       }
     }
   }
 
+  // ── Processing ──────────────────────────────
+
   Future<void> _processWords() async {
     if (_selectedIndices.isEmpty || _selectedCollectionId == null) return;
-
     setState(() => _isProcessing = true);
 
     int success = 0;
     int failed = 0;
 
-    for (int index in _selectedIndices) {
+    for (final index in _selectedIndices) {
       if (!mounted) break;
-      final wordData = _detectedWords[index];
-      final wordText = wordData['word'] ?? "";
-      final contextText = wordData['context'] ?? "";
+      final wordData    = _detectedWords[index];
+      final wordText    = wordData['word'] ?? '';
+      final contextText = wordData['context'] ?? '';
+      final wordType    = wordData['type'] ?? 'word';
+
       if (wordText.isEmpty) continue;
 
       try {
-        final Map<String, dynamic> aiData = await _aiService.generateSmartWord(
+        final aiData = await _aiService.generateSmartWord(
           wordText,
           contextText.isNotEmpty ? contextText : null,
           _selectedCollectionId!,
+          contextType: _globalContextType,
+          wordType: wordType,
         );
 
-        final newWord = Word(
+        await _dbService.insertWord(Word(
           collectionId: _selectedCollectionId!,
           word: aiData['word'],
           definition: aiData['definition'],
           translation: aiData['translation'],
           contextualInfo: aiData['contextual_info'],
-        );
-
-        await _dbService.insertWord(newWord);
+        ));
         success++;
       } catch (e) {
         failed++;
-        print("Failed to add $wordText: $e");
+        debugPrint("Failed to add $wordText: $e");
       }
     }
 
@@ -148,27 +144,31 @@ class _ScanDialogState extends State<ScanDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Added $success words${failed > 0 ? ', $failed failed' : ''}.",
-          ),
+              "Added $success words${failed > 0 ? ', $failed failed' : ''}."),
           backgroundColor: success > 0 ? Colors.green : Colors.red,
         ),
       );
-      if (success > 0) {
-        Navigator.pop(context);
-      }
+      if (success > 0) Navigator.pop(context);
     }
   }
 
+  // ── Build ───────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
+    final selected   = _detectedWords.asMap().entries
+        .where((e) => _selectedIndices.contains(e.key)).toList();
+    final unselected = _detectedWords.asMap().entries
+        .where((e) => !_selectedIndices.contains(e.key)).toList();
+
     return Dialog(
       backgroundColor: _backgroundColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       insetPadding: const EdgeInsets.all(16),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // Wrap content
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Header with Close Button
+          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 15, 10, 5),
             child: Row(
@@ -177,10 +177,9 @@ class _ScanDialogState extends State<ScanDialog> {
                 const Text(
                   "Scan from Image",
                   style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),
@@ -192,12 +191,11 @@ class _ScanDialogState extends State<ScanDialog> {
           const Divider(color: Colors.white12, height: 1),
 
           Flexible(
-            // Allow scrolling within dialog
             child: SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 20),
               child: Column(
                 children: [
-                  // Collection Dropdown
+                  // Collection Selector
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: CollectionSelector(
@@ -213,7 +211,7 @@ class _ScanDialogState extends State<ScanDialog> {
                     Container(
                       height: 300,
                       width: double.infinity,
-                      margin: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
                         image: DecorationImage(
                           image: FileImage(_image!),
@@ -229,10 +227,8 @@ class _ScanDialogState extends State<ScanDialog> {
                                   color: Colors.black54,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Text(
-                                  "Analyzing...",
-                                  style: TextStyle(color: Colors.white),
-                                ),
+                                child: const Text("Analyzing...",
+                                    style: TextStyle(color: Colors.white)),
                               ),
                             )
                           : null,
@@ -248,29 +244,23 @@ class _ScanDialogState extends State<ScanDialog> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.white10),
                         ),
-                        child: Center(
+                        child: const Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(
-                                Icons.camera_alt_outlined,
-                                size: 50,
-                                color: Colors.white24,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                "Tap to take photo",
-                                style: _textStyle.copyWith(
-                                  color: Colors.white54,
-                                ),
-                              ),
+                              Icon(Icons.camera_alt_outlined,
+                                  size: 50, color: Colors.white24),
+                              SizedBox(height: 10),
+                              Text("Tap to take photo",
+                                  style: TextStyle(color: Colors.white54)),
                             ],
                           ),
                         ),
                       ),
                     ),
 
-                  // Action Buttons
+                  // Camera / Gallery Buttons
+                  const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -296,9 +286,10 @@ class _ScanDialogState extends State<ScanDialog> {
                     ],
                   ),
 
-                  // Results List
+                  // ── Detected Words Section ──────────────
                   if (_detectedWords.isNotEmpty) ...[
                     const Divider(color: Colors.white24, height: 40),
+
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Align(
@@ -306,49 +297,50 @@ class _ScanDialogState extends State<ScanDialog> {
                         child: Text(
                           "Detected Words (${_selectedIndices.length})",
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: _accentColor,
-                          ),
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: _accentColor),
                         ),
                       ),
                     ),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _detectedWords.length,
-                      itemBuilder: (context, index) {
-                        final wordData = _detectedWords[index];
-                        final wordText = wordData['word'] ?? "";
-                        final contextText = wordData['context'] ?? "";
-                        final isSelected = _selectedIndices.contains(index);
-                        return CheckboxListTile(
-                          title: Text(
-                            wordText,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+
+                    const SizedBox(height: 14),
+
+                    // Global Mode Switcher
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Mode",
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(0.45),
+                                fontSize: 11,
+                                letterSpacing: 0.5),
                           ),
-                          subtitle: contextText.isNotEmpty ? Text(
-                            contextText,
-                            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ) : null,
-                          value: isSelected,
-                          activeColor: _accentColor,
-                          checkColor: Colors.black,
-                          onChanged: (val) {
-                            setState(() {
-                              if (val == true) {
-                                _selectedIndices.add(index);
-                              } else {
-                                _selectedIndices.remove(index);
-                              }
-                            });
-                          },
-                        );
-                      },
+                          const SizedBox(height: 6),
+                          _buildModeSwitcher(),
+                        ],
+                      ),
                     ),
 
+                    const SizedBox(height: 10),
+
+                    // Seçili kelimeler
+                    if (selected.isNotEmpty) ...[
+                      _buildGroupLabel("Selected", Colors.white70),
+                      ...selected.map((e) => _buildWordCard(e.key)),
+                    ],
+
+                    // Seçilmeyenler
+                    if (unselected.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      _buildGroupLabel("Not selected", Colors.white30),
+                      ...unselected.map((e) => _buildWordCard(e.key)),
+                    ],
+
+                    // Add Button
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: ElevatedButton(
@@ -356,27 +348,21 @@ class _ScanDialogState extends State<ScanDialog> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 40,
-                            vertical: 15,
-                          ),
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                         ),
                         child: _isProcessing
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
+                                    strokeWidth: 2, color: Colors.white),
                               )
-                            : const Text(
-                                "Add Selected Words",
+                            : const Text("Add Selected Words",
                                 style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold)),
                       ),
                     ),
                     const SizedBox(height: 50),
@@ -386,6 +372,129 @@ class _ScanDialogState extends State<ScanDialog> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Group Label ──────────────────────────────
+
+  Widget _buildGroupLabel(String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 16, 4),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  // ── Word Card ────────────────────────────────
+
+  Widget _buildWordCard(int index) {
+    final wordData    = _detectedWords[index];
+    final wordText    = wordData['word'] ?? '';
+    final contextText = wordData['context'] ?? '';
+    final isSelected  = _selectedIndices.contains(index);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isSelected
+              ? _accentColor.withOpacity(0.4)
+              : Colors.white.withOpacity(0.07),
+        ),
+      ),
+      child: CheckboxListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        title: Text(wordText,
+            style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white38,
+                fontWeight: FontWeight.bold)),
+        subtitle: contextText.isNotEmpty
+            ? Text(
+                contextText,
+                style: TextStyle(
+                    color: isSelected
+                        ? Colors.white.withOpacity(0.45)
+                        : Colors.white.withOpacity(0.2),
+                    fontSize: 12),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              )
+            : null,
+        value: isSelected,
+        activeColor: _accentColor,
+        checkColor: Colors.black,
+        onChanged: (val) => setState(() {
+          if (val == true) {
+            _selectedIndices.add(index);
+          } else {
+            _selectedIndices.remove(index);
+          }
+        }),
+      ),
+    );
+  }
+
+  // ── Global Mode Switcher ─────────────────────
+
+  Widget _buildModeSwitcher() {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        children: _modes.map((mode) {
+          final bool isActive = _globalContextType == mode['id'];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () =>
+                  setState(() => _globalContextType = mode['id']! as String),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? Colors.amber.withOpacity(0.9)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(mode['icon'] as IconData,
+                        size: 14,
+                        color: isActive ? Colors.black : Colors.white54),
+                    const SizedBox(width: 5),
+                    Text(
+                      mode['label']! as String,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight:
+                            isActive ? FontWeight.bold : FontWeight.normal,
+                        color: isActive ? Colors.black : Colors.white54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

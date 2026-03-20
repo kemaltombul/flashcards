@@ -33,7 +33,7 @@ class VocabularyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flash Cards',
+      title: 'True Vocab',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         // Zen Theme Colors

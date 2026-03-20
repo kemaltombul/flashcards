@@ -6,6 +6,7 @@ import '../models/word.dart';
 import '../models/user_profile.dart';
 import '../models/word_telemetry.dart';
 import 'app_logger.dart';
+import 'notification_service.dart';
 import 'dart:math';
 
 class FirestoreService {
@@ -17,6 +18,7 @@ class FirestoreService {
 
   // ── Hata loglama yardımcıları ────────────────
 
+  /// permission-denied → critical, diğerleri → error olarak loglar ve re-throw eder.
   Never _fail(
     String operation,
     Object e,
@@ -28,10 +30,12 @@ class FirestoreService {
     throw e;
   }
 
+  /// Stream handleError bloklarında kullanılır (Never döndüremez).
   void _logStreamError(String operation, Object e, StackTrace? st) {
     _logException(operation, e, st, category: LogCategory.firestore);
   }
 
+  /// permission-denied ise critical, değilse error seviyesinde loglar.
   void _logException(
     String operation,
     Object e,
@@ -64,8 +68,7 @@ class FirestoreService {
     const op = 'createUserProfile';
     final uid = _userId;
     if (uid == null) {
-      _log.warning(op, 'Çağrıldı ama oturum açık değil.',
-          category: LogCategory.auth);
+      _log.warning(op, 'Çağrıldı ama oturum açık değil.', category: LogCategory.auth);
       return;
     }
 
@@ -77,8 +80,7 @@ class FirestoreService {
         final randomNum = Random().nextInt(90000000) + 10000000;
         final profile = UserProfile(uid: uid, username: randomNum.toString());
         await docRef.set(profile.toMap());
-        _log.info(op, 'Yeni kullanıcı profili oluşturuldu.',
-            category: LogCategory.auth);
+        _log.info(op, 'Yeni kullanıcı profili oluşturuldu.', category: LogCategory.auth);
       }
     } catch (e, st) {
       _fail(op, e, st, category: LogCategory.auth, meta: {'uid': uid});
@@ -130,8 +132,8 @@ class FirestoreService {
       final docRef = _db.collection('collections').doc();
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       final random = Random();
-      final shareCode = String.fromCharCodes(Iterable.generate(
-          6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
+      final shareCode = String.fromCharCodes(
+          Iterable.generate(6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
 
       final collection = Collection(
         id: docRef.id,
@@ -161,9 +163,8 @@ class FirestoreService {
         .where('owner_id', isEqualTo: uid)
         .orderBy('created_at', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Collection.fromMap(doc.data(), doc.id))
-            .toList())
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => Collection.fromMap(doc.data(), doc.id)).toList())
         .handleError((e, st) {
       _logStreamError('getMyOwnedCollectionsStream', e, st as StackTrace?);
     });
@@ -179,9 +180,8 @@ class FirestoreService {
           .collection('collections')
           .where('editor_uids', arrayContains: uid)
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map((doc) => Collection.fromMap(doc.data(), doc.id))
-              .toList()),
+          .map((snapshot) =>
+              snapshot.docs.map((doc) => Collection.fromMap(doc.data(), doc.id)).toList()),
       (List<Collection> owned, List<Collection> editorSubs) {
         final combinedMap = <String, Collection>{};
         for (var c in owned) {
@@ -203,8 +203,7 @@ class FirestoreService {
     });
   }
 
-  Future<String> addEditorByUsername(
-      String collectionId, String targetUsername) async {
+  Future<String> addEditorByUsername(String collectionId, String targetUsername) async {
     const op = 'addEditorByUsername';
     final uid = _userId;
     if (uid == null) return 'Not logged in';
@@ -235,16 +234,12 @@ class FirestoreService {
     } catch (e, st) {
       _log.error(op, e,
           stackTrace: st,
-          meta: {
-            'collection_id': collectionId,
-            'target_username': targetUsername
-          });
+          meta: {'collection_id': collectionId, 'target_username': targetUsername});
       return 'Firebase Error: $e';
     }
   }
 
-  Future<void> removeEditorFromCollection(
-      String collectionId, String targetUid) async {
+  Future<void> removeEditorFromCollection(String collectionId, String targetUid) async {
     const op = 'removeEditorFromCollection';
     try {
       await _db.collection('collections').doc(collectionId).update({
@@ -253,20 +248,17 @@ class FirestoreService {
       _log.info(op, 'Editör kaldırıldı.',
           meta: {'collection_id': collectionId, 'target_uid': targetUid});
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'collection_id': collectionId, 'target_uid': targetUid});
+      _fail(op, e, st, meta: {'collection_id': collectionId, 'target_uid': targetUid});
     }
   }
 
   Stream<List<Collection>> getSubscribedCollectionsStream(UserProfile profile) {
     if (profile.subscribedCollections.isEmpty) return Stream.value([]);
 
-    final subIds =
-        profile.subscribedCollections.map((s) => s.collectionId).toList();
+    final subIds = profile.subscribedCollections.map((s) => s.collectionId).toList();
     final chunks = <List<String>>[];
     for (var i = 0; i < subIds.length; i += 10) {
-      chunks.add(subIds.sublist(
-          i, i + 10 > subIds.length ? subIds.length : i + 10));
+      chunks.add(subIds.sublist(i, i + 10 > subIds.length ? subIds.length : i + 10));
     }
 
     final streamList = chunks.map((chunk) {
@@ -319,17 +311,14 @@ class FirestoreService {
         final existingSubs =
             userSnap.data()?['subscribed_collections'] as List<dynamic>? ?? [];
         final alreadySubscribed = existingSubs.any(
-          (s) =>
-              s is Map<String, dynamic> && s['collection_id'] == collectionId,
+          (s) => s is Map<String, dynamic> && s['collection_id'] == collectionId,
         );
         if (alreadySubscribed) return true;
       }
 
-      final newSub =
-          SubscribedCollection(collectionId: collectionId, role: 'reader');
+      final newSub = SubscribedCollection(collectionId: collectionId, role: 'reader');
       await _db.collection('users').doc(uid).update({
-        'subscribed_collections':
-            FieldValue.arrayUnion([newSub.toMap()]),
+        'subscribed_collections': FieldValue.arrayUnion([newSub.toMap()]),
       });
 
       _log.info(op, 'Koleksiyona abone olundu.',
@@ -353,10 +342,7 @@ class FirestoreService {
   Future<void> updateCollectionVisibility(String id, bool isShared) async {
     const op = 'updateCollectionVisibility';
     try {
-      await _db
-          .collection('collections')
-          .doc(id)
-          .update({'is_shared': isShared});
+      await _db.collection('collections').doc(id).update({'is_shared': isShared});
     } catch (e, st) {
       _fail(op, e, st, meta: {'collection_id': id, 'is_shared': isShared});
     }
@@ -370,15 +356,12 @@ class FirestoreService {
     try {
       final userRef = _db.collection('users').doc(uid);
       if (isCurrentlyFavorite) {
-        await userRef
-            .update({'favorite_collection_ids': FieldValue.arrayRemove([id])});
+        await userRef.update({'favorite_collection_ids': FieldValue.arrayRemove([id])});
       } else {
-        await userRef
-            .update({'favorite_collection_ids': FieldValue.arrayUnion([id])});
+        await userRef.update({'favorite_collection_ids': FieldValue.arrayUnion([id])});
       }
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'collection_id': id, 'was_favorite': isCurrentlyFavorite});
+      _fail(op, e, st, meta: {'collection_id': id, 'was_favorite': isCurrentlyFavorite});
     }
   }
 
@@ -396,15 +379,12 @@ class FirestoreService {
         if (data != null && data.containsKey('subscribed_collections')) {
           final subs = data['subscribed_collections'] as List<dynamic>;
           final itemToRemove = subs.firstWhere(
-            (sub) =>
-                sub is Map<String, dynamic> &&
-                sub['collection_id'] == collectionId,
+            (sub) => sub is Map<String, dynamic> && sub['collection_id'] == collectionId,
             orElse: () => null,
           );
           if (itemToRemove != null) {
             await userRef.update({
-              'subscribed_collections':
-                  FieldValue.arrayRemove([itemToRemove]),
+              'subscribed_collections': FieldValue.arrayRemove([itemToRemove]),
             });
             _log.info(op, 'Abonelik iptal edildi.',
                 meta: {'collection_id': collectionId});
@@ -419,10 +399,8 @@ class FirestoreService {
   Future<void> deleteCollection(String id) async {
     const op = 'deleteCollection';
     try {
-      final wordsSnapshot = await _db
-          .collection('words')
-          .where('collection_id', isEqualTo: id)
-          .get();
+      final wordsSnapshot =
+          await _db.collection('words').where('collection_id', isEqualTo: id).get();
 
       const batchLimit = 500;
       final docs = wordsSnapshot.docs;
@@ -467,9 +445,7 @@ class FirestoreService {
           .where('collection_id', isEqualTo: collectionId)
           .get(const GetOptions(source: Source.serverAndCache));
 
-      return snapshot.docs
-          .map((doc) => Word.fromMap(doc.data(), doc.id))
-          .toList();
+      return snapshot.docs.map((doc) => Word.fromMap(doc.data(), doc.id)).toList();
     } catch (e, st) {
       _fail(op, e, st, meta: {'collection_id': collectionId});
     }
@@ -519,54 +495,39 @@ class FirestoreService {
     if (uid == null) return;
 
     try {
-      final userRef = _db.collection('users').doc(uid);
-      final statRef = userRef.collection('word_stats').doc(wordId);
-
-      // Kart görüntüleme kaydı (word_stats subcollection)
+      final statRef =
+          _db.collection('users').doc(uid).collection('word_stats').doc(wordId);
       await statRef.set({
         'collection_id': collectionId,
         'view_count': FieldValue.increment(1),
         'last_reviewed_at': DateTime.now().millisecondsSinceEpoch,
       }, SetOptions(merge: true));
 
-      // UserProfile üzerinde toplam sayaçları güncelle
-      // total_cards_reviewed: kelime silinse bile kaybolmaz
-      final Map<String, dynamic> profileUpdate = {
-        'total_cards_reviewed': FieldValue.increment(1),
-      };
       if (durationMs > 0) {
-        profileUpdate['total_study_time_ms'] = FieldValue.increment(durationMs);
+        await _db.collection('users').doc(uid).update({
+          'total_study_time_ms': FieldValue.increment(durationMs),
+        });
       }
-      await userRef.update(profileUpdate);
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'word_id': wordId, 'collection_id': collectionId});
+      _fail(op, e, st, meta: {'word_id': wordId, 'collection_id': collectionId});
     }
   }
 
-  Future<void> addRatingToWord(
-      String wordId, String collectionId, int rating) async {
+  Future<void> addRatingToWord(String wordId, String collectionId, int rating) async {
     const op = 'addRatingToWord';
     final uid = _userId;
     if (uid == null) return;
 
     try {
-      final statRef = _db
-          .collection('users')
-          .doc(uid)
-          .collection('word_stats')
-          .doc(wordId);
+      final statRef =
+          _db.collection('users').doc(uid).collection('word_stats').doc(wordId);
       await statRef.set({
         'collection_id': collectionId,
         'my_ratings': FieldValue.arrayUnion([rating]),
       }, SetOptions(merge: true));
     } catch (e, st) {
       _fail(op, e, st,
-          meta: {
-            'word_id': wordId,
-            'collection_id': collectionId,
-            'rating': rating
-          });
+          meta: {'word_id': wordId, 'collection_id': collectionId, 'rating': rating});
     }
   }
 
@@ -583,31 +544,6 @@ class FirestoreService {
           .count()
           .get();
       return snapshot.count ?? 0;
-    } catch (e, st) {
-      _fail(op, e, st, meta: {'uid': uid});
-    }
-  }
-
-  /// Kullanıcının toplam kaç kart görüntülediğini döndürür.
-  /// Her kart geçişinde view_count artırıldığı için bu değer
-  /// toplam flashcard görüntüleme sayısını verir.
-  Future<int> getTotalCardsReviewed() async {
-    const op = 'getTotalCardsReviewed';
-    final uid = _userId;
-    if (uid == null) return 0;
-
-    try {
-      final snapshot = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('word_stats')
-          .get();
-
-      int total = 0;
-      for (final doc in snapshot.docs) {
-        total += (doc.data()['view_count'] as int? ?? 0);
-      }
-      return total;
     } catch (e, st) {
       _fail(op, e, st, meta: {'uid': uid});
     }
@@ -659,14 +595,13 @@ class FirestoreService {
       const chunkSize = 30;
 
       for (int i = 0; i < collectionIds.length; i += chunkSize) {
-        final chunk = collectionIds.sublist(
-            i, (i + chunkSize).clamp(0, collectionIds.length));
+        final chunk =
+            collectionIds.sublist(i, (i + chunkSize).clamp(0, collectionIds.length));
         final snap = await _db
             .collection('words')
             .where('collection_id', whereIn: chunk)
             .get();
-        allWords
-            .addAll(snap.docs.map((doc) => Word.fromMap(doc.data(), doc.id)));
+        allWords.addAll(snap.docs.map((doc) => Word.fromMap(doc.data(), doc.id)));
       }
 
       if (query.isEmpty) return allWords;
@@ -677,8 +612,7 @@ class FirestoreService {
             w.translation.toLowerCase().contains(lowerQ);
       }).toList();
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'query': query, 'collection_count': collectionIds.length});
+      _fail(op, e, st, meta: {'query': query, 'collection_count': collectionIds.length});
     }
   }
 
@@ -686,12 +620,6 @@ class FirestoreService {
   // Streaks
   // =======================================================================
 
-  /// Flashcard sayfası açıldığında çağrılır.
-  ///
-  /// - Bugün zaten çalışıldıysa → hiçbir şey yapma (idempotent)
-  /// - Dün çalışıldıysa        → streak + 1
-  /// - 2+ gün ara verdiyse     → streak = 1 (yeniden başla)
-  /// - Hiç çalışmadıysa        → streak = 1
   Future<void> updateUserStreak() async {
     const op = 'updateUserStreak';
     final uid = _userId;
@@ -702,86 +630,88 @@ class FirestoreService {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
 
+      bool studiedToday = false;
+
       await _db.runTransaction((transaction) async {
         final snapshot = await transaction.get(userRef);
 
-        // Kullanıcı dokümanı yoksa sıfırdan başlat
-        if (!snapshot.exists || snapshot.data() == null) {
-          transaction.set(
-              userRef,
-              {
-                'streak': 1,
-                'last_study_date': today.millisecondsSinceEpoch,
-              },
-              SetOptions(merge: true));
-          _log.info(op, 'İlk streak kaydı oluşturuldu.',
-              meta: {'uid': uid});
+        if (!snapshot.exists) {
+          transaction.set(userRef, {
+            'streak': 1,
+            'last_study_date': today.millisecondsSinceEpoch,
+          });
+          studiedToday = true;
           return;
         }
 
-        final data = snapshot.data()!;
-        final int currentStreak = data['streak'] ?? 0;
-        final int? lastTimestamp = data['last_study_date'];
+        final data = snapshot.data();
+        if (data == null) return;
 
-        // Eski kullanıcı: streak alanı hiç oluşturulmamış
-        // veya hiç çalışmamış → streak = 1 ile başlat
-        if (lastTimestamp == null) {
+        int currentStreak = data['streak'] ?? 0;
+        int? lastStudyTimestamp = data['last_study_date'];
+
+        if (lastStudyTimestamp == null) {
           transaction.update(userRef, {
             'streak': 1,
             'last_study_date': today.millisecondsSinceEpoch,
           });
-          _log.info(op,
-              currentStreak == 0 && !data.containsKey('streak')
-                  ? 'Eski kullanıcı: streak alanları oluşturuldu.'
-                  : 'Hiç çalışılmamış, streak başlatıldı.',
-              meta: {'uid': uid});
+          studiedToday = true;
           return;
         }
 
-        final lastDate = DateTime.fromMillisecondsSinceEpoch(lastTimestamp);
-        final normalizedLast =
-            DateTime(lastDate.year, lastDate.month, lastDate.day);
-        final diff = today.difference(normalizedLast).inDays;
+        final lastStudyDate =
+            DateTime.fromMillisecondsSinceEpoch(lastStudyTimestamp);
+        final normalizedLastStudy =
+            DateTime(lastStudyDate.year, lastStudyDate.month, lastStudyDate.day);
+        final difference = today.difference(normalizedLastStudy).inDays;
 
-        if (diff == 0) {
-          // Bugün zaten çalışıldı → dokunma
-          _log.info(op, 'Bugün zaten çalışıldı, streak değişmedi.',
-              meta: {'streak': currentStreak});
-          return;
-        } else if (diff == 1) {
-          // Dün çalışıldı → streak devam ediyor
+        if (difference == 0) {
+          // Bugün zaten çalışılmış — bildirim zaten iptal edilmiş olmalı
+          studiedToday = true;
+        } else if (difference == 1) {
           transaction.update(userRef, {
             'streak': currentStreak + 1,
             'last_study_date': today.millisecondsSinceEpoch,
           });
-          _log.info(op, 'Streak arttı.',
-              meta: {'new_streak': currentStreak + 1});
-        } else {
-          // 2+ gün ara → streak koptu, yeniden başla
+          studiedToday = true;
+        } else if (difference > 1) {
           transaction.update(userRef, {
             'streak': 1,
             'last_study_date': today.millisecondsSinceEpoch,
           });
-          _log.info(op, 'Streak koptu, sıfırlandı.',
-              meta: {'previous_streak': currentStreak});
+          studiedToday = true;
         }
       });
+
+      // Streak korundu → bugünkü bildirimi iptal et, yarın için yeniden zamanla
+      if (studiedToday) {
+        await NotificationService.instance.onStreakUpdated();
+      }
     } catch (e, st) {
       _fail(op, e, st, meta: {'uid': uid});
     }
   }
 
-  /// Streak'i reaktif olarak dinler.
-  ///
-  /// UserProfile.currentStreak getter'ı kopukluk kontrolünü zaten yapar.
   Stream<int> getUserStreakStream() {
     final uid = _userId;
     if (uid == null) return Stream.value(0);
 
     return _db.collection('users').doc(uid).snapshots().map((snapshot) {
       if (!snapshot.exists || snapshot.data() == null) return 0;
-      final profile = UserProfile.fromMap(snapshot.data()!);
-      return profile.currentStreak;
+      final data = snapshot.data()!;
+      int streak = data['streak'] ?? 0;
+      int? lastStudyTimestamp = data['last_study_date'];
+
+      if (lastStudyTimestamp != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final lastStudyDate =
+            DateTime.fromMillisecondsSinceEpoch(lastStudyTimestamp);
+        final normalizedLastStudy =
+            DateTime(lastStudyDate.year, lastStudyDate.month, lastStudyDate.day);
+        if (today.difference(normalizedLastStudy).inDays > 1) return 0;
+      }
+      return streak;
     }).handleError((e, st) {
       _logStreamError('getUserStreakStream', e, st as StackTrace?);
     });
