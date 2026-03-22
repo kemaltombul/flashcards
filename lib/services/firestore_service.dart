@@ -77,8 +77,6 @@ class FirestoreService {
         final randomNum = Random().nextInt(90000000) + 10000000;
         final profile = UserProfile(uid: uid, username: randomNum.toString());
         await docRef.set(profile.toMap());
-        _log.info(op, 'Yeni kullanıcı profili oluşturuldu.',
-            category: LogCategory.auth);
       }
     } catch (e, st) {
       _fail(op, e, st, category: LogCategory.auth, meta: {'uid': uid});
@@ -144,8 +142,6 @@ class FirestoreService {
       );
 
       await docRef.set(collection.toMap());
-      _log.info(op, '"$name" koleksiyonu oluşturuldu.',
-          meta: {'collection_id': docRef.id, 'is_shared': isShared});
       return docRef.id;
     } catch (e, st) {
       _fail(op, e, st, meta: {'name': name, 'uid': uid});
@@ -229,8 +225,6 @@ class FirestoreService {
         'editor_uids': FieldValue.arrayUnion([targetUid]),
       });
 
-      _log.info(op, '"$targetUsername" editör olarak eklendi.',
-          meta: {'collection_id': collectionId, 'target_uid': targetUid});
       return 'Success';
     } catch (e, st) {
       _log.error(op, e,
@@ -250,8 +244,6 @@ class FirestoreService {
       await _db.collection('collections').doc(collectionId).update({
         'editor_uids': FieldValue.arrayRemove([targetUid]),
       });
-      _log.info(op, 'Editör kaldırıldı.',
-          meta: {'collection_id': collectionId, 'target_uid': targetUid});
     } catch (e, st) {
       _fail(op, e, st,
           meta: {'collection_id': collectionId, 'target_uid': targetUid});
@@ -332,8 +324,6 @@ class FirestoreService {
             FieldValue.arrayUnion([newSub.toMap()]),
       });
 
-      _log.info(op, 'Koleksiyona abone olundu.',
-          meta: {'collection_id': collectionId, 'share_code': shareCode});
       return true;
     } catch (e, st) {
       _log.error(op, e, stackTrace: st, meta: {'share_code': shareCode});
@@ -406,8 +396,6 @@ class FirestoreService {
               'subscribed_collections':
                   FieldValue.arrayRemove([itemToRemove]),
             });
-            _log.info(op, 'Abonelik iptal edildi.',
-                meta: {'collection_id': collectionId});
           }
         }
       }
@@ -436,8 +424,6 @@ class FirestoreService {
       }
 
       await _db.collection('collections').doc(id).delete();
-      _log.info(op, 'Koleksiyon ve ${docs.length} kelime silindi.',
-          meta: {'collection_id': id, 'word_count': docs.length});
     } catch (e, st) {
       _fail(op, e, st, meta: {'collection_id': id});
     }
@@ -714,8 +700,6 @@ class FirestoreService {
                 'last_study_date': today.millisecondsSinceEpoch,
               },
               SetOptions(merge: true));
-          _log.info(op, 'İlk streak kaydı oluşturuldu.',
-              meta: {'uid': uid});
           return;
         }
 
@@ -730,11 +714,6 @@ class FirestoreService {
             'streak': 1,
             'last_study_date': today.millisecondsSinceEpoch,
           });
-          _log.info(op,
-              currentStreak == 0 && !data.containsKey('streak')
-                  ? 'Eski kullanıcı: streak alanları oluşturuldu.'
-                  : 'Hiç çalışılmamış, streak başlatıldı.',
-              meta: {'uid': uid});
           return;
         }
 
@@ -745,8 +724,6 @@ class FirestoreService {
 
         if (diff == 0) {
           // Bugün zaten çalışıldı → dokunma
-          _log.info(op, 'Bugün zaten çalışıldı, streak değişmedi.',
-              meta: {'streak': currentStreak});
           return;
         } else if (diff == 1) {
           // Dün çalışıldı → streak devam ediyor
@@ -754,16 +731,12 @@ class FirestoreService {
             'streak': currentStreak + 1,
             'last_study_date': today.millisecondsSinceEpoch,
           });
-          _log.info(op, 'Streak arttı.',
-              meta: {'new_streak': currentStreak + 1});
         } else {
           // 2+ gün ara → streak koptu, yeniden başla
           transaction.update(userRef, {
             'streak': 1,
             'last_study_date': today.millisecondsSinceEpoch,
           });
-          _log.info(op, 'Streak koptu, sıfırlandı.',
-              meta: {'previous_streak': currentStreak});
         }
       });
     } catch (e, st) {

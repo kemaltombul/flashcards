@@ -118,6 +118,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
   Future<void> _initializeData() async {
     try {
       _words = await _dbService.getWordsByCollection(widget.collectionId);
+      _words.shuffle(); // Kelimeleri karıştır
       _isLoading = false;
 
       if (mounted) {
