@@ -33,33 +33,33 @@ class _LogsPageState extends State<LogsPage> {
   // ─────────────────────────────────────────────
 
   Color _levelColor(LogLevel level) => switch (level) {
-        LogLevel.info     => const Color(0xFF64B5F6),
-        LogLevel.warning  => const Color(0xFFFFB74D),
-        LogLevel.error    => const Color(0xFFEF5350),
-        LogLevel.critical => const Color(0xFFCE93D8),
-      };
+    LogLevel.info => const Color(0xFF64B5F6),
+    LogLevel.warning => const Color(0xFFFFB74D),
+    LogLevel.error => const Color(0xFFEF5350),
+    LogLevel.critical => const Color(0xFFCE93D8),
+  };
 
   IconData _levelIcon(LogLevel level) => switch (level) {
-        LogLevel.info     => Icons.info_outline_rounded,
-        LogLevel.warning  => Icons.warning_amber_rounded,
-        LogLevel.error    => Icons.error_outline_rounded,
-        LogLevel.critical => Icons.crisis_alert_rounded,
-      };
+    LogLevel.info => Icons.info_outline_rounded,
+    LogLevel.warning => Icons.warning_amber_rounded,
+    LogLevel.error => Icons.error_outline_rounded,
+    LogLevel.critical => Icons.crisis_alert_rounded,
+  };
 
   Color _categoryColor(LogCategory cat) => switch (cat) {
-        LogCategory.firestore  => const Color(0xFFFF8A65),
-        LogCategory.auth       => const Color(0xFF81C784),
-        LogCategory.ai         => const Color(0xFFD0BCFF),
-        LogCategory.navigation => const Color(0xFF4DD0E1),
-        LogCategory.general    => Colors.white38,
-      };
+    LogCategory.firestore => const Color(0xFFFF8A65),
+    LogCategory.auth => const Color(0xFF81C784),
+    LogCategory.ai => const Color(0xFFD0BCFF),
+    LogCategory.navigation => const Color(0xFF4DD0E1),
+    LogCategory.general => Colors.white38,
+  };
 
   String _formatTime(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inSeconds < 60)  return '${diff.inSeconds}s ago';
-    if (diff.inMinutes < 60)  return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24)    return '${diff.inHours}h ago';
+    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')} '
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
@@ -74,7 +74,10 @@ class _LogsPageState extends State<LogsPage> {
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Clear All Logs', style: _textStyle.copyWith(fontWeight: FontWeight.bold)),
+        title: Text(
+          'Clear All Logs',
+          style: _textStyle.copyWith(fontWeight: FontWeight.bold),
+        ),
         content: Text(
           'This will permanently delete all log entries. Are you sure?',
           style: _textStyle.copyWith(color: Colors.white60, fontSize: 14),
@@ -82,7 +85,10 @@ class _LogsPageState extends State<LogsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade400)),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey.shade400),
+            ),
           ),
           TextButton(
             onPressed: () async {
@@ -91,13 +97,19 @@ class _LogsPageState extends State<LogsPage> {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('All logs cleared.', style: TextStyle(color: Colors.black)),
+                    content: const Text(
+                      'All logs cleared.',
+                      style: TextStyle(color: Colors.black),
+                    ),
                     backgroundColor: _accentColor,
                   ),
                 );
               }
             },
-            child: const Text('Clear', style: TextStyle(color: Colors.redAccent)),
+            child: const Text(
+              'Clear',
+              style: TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
@@ -120,7 +132,9 @@ class _LogsPageState extends State<LogsPage> {
             child: Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1A1A).withOpacity(0.97),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
                 border: Border.all(color: Colors.white.withOpacity(0.08)),
               ),
               child: ListView(
@@ -130,7 +144,8 @@ class _LogsPageState extends State<LogsPage> {
                   // drag handle
                   Center(
                     child: Container(
-                      width: 40, height: 4,
+                      width: 40,
+                      height: 4,
                       margin: const EdgeInsets.only(bottom: 20),
                       decoration: BoxDecoration(
                         color: Colors.white24,
@@ -148,7 +163,11 @@ class _LogsPageState extends State<LogsPage> {
                           color: _levelColor(log.level).withOpacity(0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(_levelIcon(log.level), color: _levelColor(log.level), size: 22),
+                        child: Icon(
+                          _levelIcon(log.level),
+                          color: _levelColor(log.level),
+                          size: 22,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -157,19 +176,32 @@ class _LogsPageState extends State<LogsPage> {
                           children: [
                             Text(
                               log.operation,
-                              style: _textStyle.copyWith(fontWeight: FontWeight.bold, fontSize: 16),
+                              style: _textStyle.copyWith(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              log.timestamp.toIso8601String().replaceFirst('T', '  ').substring(0, 22),
-                              style: _textStyle.copyWith(color: Colors.white38, fontSize: 12),
+                              log.timestamp
+                                  .toIso8601String()
+                                  .replaceFirst('T', '  ')
+                                  .substring(0, 22),
+                              style: _textStyle.copyWith(
+                                color: Colors.white38,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       // delete button
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.redAccent,
+                          size: 20,
+                        ),
                         onPressed: () async {
                           Navigator.pop(context);
                           await _logger.deleteLog(log.id);
@@ -179,8 +211,16 @@ class _LogsPageState extends State<LogsPage> {
                   ),
 
                   const SizedBox(height: 20),
-                  _detailRow('Level',    log.level.name.toUpperCase(),    _levelColor(log.level)),
-                  _detailRow('Category', log.category.name,               _categoryColor(log.category)),
+                  _detailRow(
+                    'Level',
+                    log.level.name.toUpperCase(),
+                    _levelColor(log.level),
+                  ),
+                  _detailRow(
+                    'Category',
+                    log.category.name,
+                    _categoryColor(log.category),
+                  ),
                   if (log.userId != null)
                     _detailRow('User ID', log.userId!, Colors.white54),
 
@@ -191,13 +231,19 @@ class _LogsPageState extends State<LogsPage> {
                     const SizedBox(height: 16),
                     _detailSection(
                       'Meta',
-                      log.meta!.entries.map((e) => '${e.key}: ${e.value}').join('\n'),
+                      log.meta!.entries
+                          .map((e) => '${e.key}: ${e.value}')
+                          .join('\n'),
                     ),
                   ],
 
                   if (log.detail != null && log.detail!.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    _detailSection('Stack Trace / Detail', log.detail!, isCode: true),
+                    _detailSection(
+                      'Stack Trace / Detail',
+                      log.detail!,
+                      isCode: true,
+                    ),
                   ],
                 ],
               ),
@@ -209,29 +255,47 @@ class _LogsPageState extends State<LogsPage> {
   }
 
   Widget _detailRow(String label, String value, Color valueColor) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 80,
-              child: Text(label, style: _textStyle.copyWith(color: Colors.white38, fontSize: 12)),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: valueColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(value, style: TextStyle(color: valueColor, fontSize: 12, fontWeight: FontWeight.w600)),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            label,
+            style: _textStyle.copyWith(color: Colors.white38, fontSize: 12),
+          ),
         ),
-      );
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: valueColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            value,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
-  Widget _detailSection(String title, String content, {bool isCode = false}) => Column(
+  Widget _detailSection(String title, String content, {bool isCode = false}) =>
+      Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: _textStyle.copyWith(color: Colors.white38, fontSize: 12, letterSpacing: 1)),
+          Text(
+            title,
+            style: _textStyle.copyWith(
+              color: Colors.white38,
+              fontSize: 12,
+              letterSpacing: 1,
+            ),
+          ),
           const SizedBox(height: 8),
           Container(
             width: double.infinity,
@@ -259,61 +323,75 @@ class _LogsPageState extends State<LogsPage> {
   // ─────────────────────────────────────────────
 
   Widget _filterBar() => SizedBox(
-        height: 38,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          children: [
-            // Level filters
-            ...LogLevel.values.map((l) => _chip(
-                  label: l.name,
-                  color: _levelColor(l),
-                  selected: _selectedLevel == l,
-                  onTap: () => setState(() => _selectedLevel = _selectedLevel == l ? null : l),
-                )),
-            const SizedBox(width: 8),
-            Container(width: 1, color: Colors.white12, margin: const EdgeInsets.symmetric(vertical: 6)),
-            const SizedBox(width: 8),
-            // Category filters
-            ...LogCategory.values.map((c) => _chip(
-                  label: c.name,
-                  color: _categoryColor(c),
-                  selected: _selectedCategory == c,
-                  onTap: () => setState(() => _selectedCategory = _selectedCategory == c ? null : c),
-                )),
-          ],
+    height: 38,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      children: [
+        // Level filters
+        ...LogLevel.values.map(
+          (l) => _chip(
+            label: l.name,
+            color: _levelColor(l),
+            selected: _selectedLevel == l,
+            onTap: () =>
+                setState(() => _selectedLevel = _selectedLevel == l ? null : l),
+          ),
         ),
-      );
+        const SizedBox(width: 8),
+        Container(
+          width: 1,
+          color: Colors.white12,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+        ),
+        const SizedBox(width: 8),
+        // Category filters
+        ...LogCategory.values.map(
+          (c) => _chip(
+            label: c.name,
+            color: _categoryColor(c),
+            selected: _selectedCategory == c,
+            onTap: () => setState(
+              () => _selectedCategory = _selectedCategory == c ? null : c,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _chip({
     required String label,
     required Color color,
     required bool selected,
     required VoidCallback onTap,
-  }) =>
-      GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          margin: const EdgeInsets.only(right: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? color.withOpacity(0.22) : Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected ? color.withOpacity(0.7) : Colors.white.withOpacity(0.1),
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? color : Colors.white54,
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
+  }) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: selected
+            ? color.withOpacity(0.22)
+            : Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: selected
+              ? color.withOpacity(0.7)
+              : Colors.white.withOpacity(0.1),
         ),
-      );
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: selected ? color : Colors.white54,
+          fontSize: 12,
+          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    ),
+  );
 
   // ─────────────────────────────────────────────
   // Log tile
@@ -376,23 +454,35 @@ class _LogsPageState extends State<LogsPage> {
                             ),
                             Text(
                               _formatTime(log.timestamp),
-                              style: _textStyle.copyWith(fontSize: 11, color: Colors.white30),
+                              style: _textStyle.copyWith(
+                                fontSize: 11,
+                                color: Colors.white30,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Text(
                           log.message,
-                          style: _textStyle.copyWith(fontSize: 12, color: Colors.white60, height: 1.4),
+                          style: _textStyle.copyWith(
+                            fontSize: 12,
+                            color: Colors.white60,
+                            height: 1.4,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
                         // Category pill
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: _categoryColor(log.category).withOpacity(0.12),
+                            color: _categoryColor(
+                              log.category,
+                            ).withOpacity(0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -411,7 +501,11 @@ class _LogsPageState extends State<LogsPage> {
                   // Chevron
                   const Padding(
                     padding: EdgeInsets.only(top: 10, left: 8),
-                    child: Icon(Icons.chevron_right_rounded, color: Colors.white12, size: 18),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white12,
+                      size: 18,
+                    ),
                   ),
                 ],
               ),
@@ -437,10 +531,16 @@ class _LogsPageState extends State<LogsPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.lock_outline_rounded, size: 64, color: Colors.white12),
+              const Icon(
+                Icons.lock_outline_rounded,
+                size: 64,
+                color: Colors.white12,
+              ),
               const SizedBox(height: 16),
-              Text('Access denied.',
-                  style: _textStyle.copyWith(color: Colors.white30, fontSize: 15)),
+              Text(
+                'Access denied.',
+                style: _textStyle.copyWith(color: Colors.white30, fontSize: 15),
+              ),
             ],
           ),
         ),
@@ -459,14 +559,28 @@ class _LogsPageState extends State<LogsPage> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(width: 4),
-                  Text('App Logs', style: _textStyle.copyWith(fontSize: 24, fontWeight: FontWeight.w300)),
+                  Text(
+                    'App Logs',
+                    style: _textStyle.copyWith(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w300,
+                    ),
+                  ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent, size: 22),
+                    icon: const Icon(
+                      Icons.delete_sweep_outlined,
+                      color: Colors.redAccent,
+                      size: 22,
+                    ),
                     tooltip: 'Clear All',
                     onPressed: _confirmClearAll,
                   ),
@@ -501,12 +615,19 @@ class _LogsPageState extends State<LogsPage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.shield_outlined, size: 56, color: Colors.redAccent),
+                            const Icon(
+                              Icons.shield_outlined,
+                              size: 56,
+                              color: Colors.redAccent,
+                            ),
                             const SizedBox(height: 16),
                             Text(
                               'Failed to load logs:\n${snapshot.error}',
                               textAlign: TextAlign.center,
-                              style: _textStyle.copyWith(color: Colors.redAccent, fontSize: 13),
+                              style: _textStyle.copyWith(
+                                color: Colors.redAccent,
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
@@ -521,13 +642,20 @@ class _LogsPageState extends State<LogsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.checklist_rounded, size: 64, color: Colors.white.withOpacity(0.07)),
+                          Icon(
+                            Icons.checklist_rounded,
+                            size: 64,
+                            color: Colors.white.withOpacity(0.07),
+                          ),
                           const SizedBox(height: 16),
                           Text(
                             _selectedLevel != null || _selectedCategory != null
                                 ? 'No logs match the current filter.'
                                 : 'No logs yet.',
-                            style: _textStyle.copyWith(color: Colors.white30, fontSize: 15),
+                            style: _textStyle.copyWith(
+                              color: Colors.white30,
+                              fontSize: 15,
+                            ),
                           ),
                         ],
                       ),

@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:dart_openai/dart_openai.dart';
+import 'package:dart_openai/dart_openai.dart' hide Word;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'firestore_service.dart';
+import '../models/word.dart';
 
 // ─────────────────────────────────────────────
 // Custom Exceptions
@@ -34,11 +35,13 @@ class AIEmptyResponseException extends AIException {
 }
 
 class AIParseException extends AIException {
-  const AIParseException(String detail) : super('Yanıt ayrıştırılamadı: $detail');
+  const AIParseException(String detail)
+    : super('Yanıt ayrıştırılamadı: $detail');
 }
 
 class AIGenerationException extends AIException {
-  const AIGenerationException(String detail) : super('Kelime üretilemedi: $detail');
+  const AIGenerationException(String detail)
+    : super('Kelime üretilemedi: $detail');
 }
 
 // ─────────────────────────────────────────────
@@ -57,58 +60,27 @@ class ValidationResult {
   });
 
   @override
-  String toString() =>
-      'ValidationResult(valid: $valid, issues: $issues)';
+  String toString() => 'ValidationResult(valid: $valid, issues: $issues)';
 }
 
 // ─────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────
 
-enum WordType {
-  word,
-  phrasalVerb,
-  idiom,
-  collocation;
-
-  static WordType fromString(String value) => switch (value) {
-        'phrasal_verb' => WordType.phrasalVerb,
-        'idiom'        => WordType.idiom,
-        'collocation'  => WordType.collocation,
-        _              => WordType.word,
-      };
-
-  String get apiValue => switch (this) {
-        WordType.phrasalVerb => 'phrasal_verb',
-        WordType.idiom       => 'idiom',
-        WordType.collocation => 'collocation',
-        WordType.word        => 'word',
-      };
-
-  bool get isMultiWord => this != WordType.word;
-
-  String get description => switch (this) {
-        WordType.phrasalVerb => 'phrasal verb (e.g. "give up", "break up")',
-        WordType.idiom       => 'idiom (e.g. "once in a blue moon")',
-        WordType.collocation => 'collocation (e.g. "make a decision")',
-        WordType.word        => 'single vocabulary word',
-      };
-}
-
 enum ContextMode { academy, cinema, practical }
 
 extension ContextModeX on ContextMode {
   String get label => switch (this) {
-        ContextMode.academy   => 'Academy',
-        ContextMode.cinema    => 'Cinema',
-        ContextMode.practical => 'Practical',
-      };
+    ContextMode.academy => 'Academy',
+    ContextMode.cinema => 'Cinema',
+    ContextMode.practical => 'Practical',
+  };
 
   static ContextMode fromString(String value) => switch (value) {
-        'Cinema'    => ContextMode.cinema,
-        'Practical' => ContextMode.practical,
-        _           => ContextMode.academy,
-      };
+    'Cinema' => ContextMode.cinema,
+    'Practical' => ContextMode.practical,
+    _ => ContextMode.academy,
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -119,7 +91,7 @@ class _PromptBuilder {
   static String wordDefinitionSystem({
     required String word,
     required ContextMode mode,
-    required WordType wordType,
+    required PartOfSpeech partOfSpeech,
     required String? existingDefinition,
     required String? existingTranslation,
     required String? existingContextualInfo,
@@ -133,13 +105,20 @@ class _PromptBuilder {
 Role: Expert dictionary assistant for CEFR A1 (Beginner) English learners.
 Task: Generate structured vocabulary data for the word/phrase below.
 Output: STRICTLY valid JSON — no markdown, no backticks, no extra text.
-Schema: {"word": "...", "definition": "...", "translation": "...", "contextual_info": "..."}
+Schema: {
+  "word_structure_analysis": "Analyze the grammar structure of the input (e.g., 'running = run + ing. Suffix -ing is present continuous. Root is run.'). Explain exactly why it should or should not be lemmatized.",
+  "word": "...",
+  "definition": "...",
+  "translation": "...",
+  "contextual_info": "...",
+  "part_of_speech": "..."
+}
 ''');
 
     // --- Word type handling ---
-    if (wordType.isMultiWord) {
+    if (partOfSpeech.isMultiWord) {
       buffer.writeln('''
-PHRASE TYPE: "$word" is a ${wordType.description}.
+PHRASE TYPE: "$word" is a ${partOfSpeech.description}.
 - Treat the entire phrase as ONE vocabulary unit. Never split it.
 - Definition must explain the phrase holistically.
   ✅ "fed up" → "very tired of something and annoyed by it"
@@ -148,7 +127,7 @@ PHRASE TYPE: "$word" is a ${wordType.description}.
     }
 
     // --- Sentence extraction ---
-    if (inputIsSentence && !wordType.isMultiWord) {
+    if (inputIsSentence && !partOfSpeech.isMultiWord) {
       buffer.writeln('''
 SENTENCE INPUT DETECTED:
 The input appears to be a full sentence.
@@ -168,22 +147,29 @@ Definition and translation MUST reflect this context.
     }
 
     // --- Existing user data ---
-    final hasExisting = existingTranslation != null ||
+    final hasExisting =
+        existingTranslation != null ||
         existingDefinition != null ||
         existingContextualInfo != null;
 
     if (hasExisting) {
       buffer.writeln('EXISTING USER DATA (verify and reuse if accurate):');
       if (existingTranslation != null) {
-        buffer.writeln('  - translation: "$existingTranslation" → keep if correct, fix if wrong.');
+        buffer.writeln(
+          '  - translation: "$existingTranslation" → keep if correct, fix if wrong.',
+        );
       }
       if (existingDefinition != null) {
-        buffer.writeln('  - definition: "$existingDefinition" → simplify to A1 level if needed.');
+        buffer.writeln(
+          '  - definition: "$existingDefinition" → simplify to A1 level if needed.',
+        );
       }
       if (existingContextualInfo != null) {
         buffer.writeln('  - contextual_info: "$existingContextualInfo"');
       }
-      buffer.writeln('Fill ONLY missing fields. Do not overwrite accurate data.\n');
+      buffer.writeln(
+        'Fill ONLY missing fields. Do not overwrite accurate data.\n',
+      );
     }
 
     // --- Field rules ---
@@ -191,22 +177,29 @@ Definition and translation MUST reflect this context.
 FIELD RULES:
 
 1. word
+   - CRITICAL: Strip ALL inflectional suffixes (-ing, -ed, -s) and ALWAYS return the bare dictionary root. NEVER return conjugated verbs like "running" or "played", return "run" or "play".
    - Return the phrase as-is for phrasal verbs and idioms.
-   - Return the extracted word if input was a sentence.
+   - Return the extracted root word if input was a sentence.
 
 2. definition
    - CEFR A1 vocabulary only. Max 12 words.
    - Clear, simple, no jargon.
+   - MUST define the BARE ROOT form (the lemma), not the inflected form.
 
 3. translation (Turkish)
    - 1–4 words ONLY. Just the word or a short phrase.
+   - MUST translate the BARE ROOT form. Do NOT add tenses or personal suffixes.
    - NO sentences. NO explanations. NO suffixes that turn it into a sentence.
-   ✅ "yorulmak", "bıkmak", "ayrılmak"
-   ❌ "bir şeyden çok yorulmak ve bundan rahatsız olmak"
+   ✅ "yorulmak", "bıkmak", "ayrılmak", "koşmak"
+   ❌ "bir şeyden çok yorulmak ve bundan rahatsız olmak", "yoruldum", "koşuyor"
 
 4. contextual_info
    - MUST be a plain text string. NO JSON, NO nested objects, NO arrays.
    ${_contextualInfoRule(mode, word)}
+
+5. part_of_speech
+   - MUST be exactly ONE of these 12 values: "noun", "verb", "adjective", "adverb", "pronoun", "preposition", "conjunction", "interjection", "phrasal_verb", "idiom", "collocation", "proverb".
+   - Determine the most accurate part of speech or phrase type for "$word".
 ''');
 
     return buffer.toString();
@@ -214,7 +207,8 @@ FIELD RULES:
 
   static String _contextualInfoRule(ContextMode mode, String word) {
     return switch (mode) {
-      ContextMode.cinema => '''
+      ContextMode.cinema =>
+        '''
 Mode: Cinema
    - Provide ONE real, well-known quote from a movie, TV show, or song that uses "$word".
    - Format: [Title (Year)]: "exact quote"
@@ -223,7 +217,8 @@ Mode: Cinema
    - Max 20 words for the quote.
    - Example: [The Dark Knight (2008)]: "Why so serious?"''',
 
-      ContextMode.practical => '''
+      ContextMode.practical =>
+        '''
 Mode: Practical
    - Provide ONE real-life example sentence for "$word".
    - Choose the most natural setting: workplace, casual talk, text/social media, shopping/travel.
@@ -231,7 +226,8 @@ Mode: Practical
    - Must sound like something a real person would say. Max 15 words.
    - Example: [Workplace]: "I'm fed up with meetings that could've been emails."''',
 
-      ContextMode.academy => '''
+      ContextMode.academy =>
+        '''
 Mode: Academy
    - Format:
        Synonyms: word1, word2, word3
@@ -251,6 +247,7 @@ Mode: Academy
    - Do NOT write "none" or leave the value empty.
 
    STYLE:
+   - Synonyms and antonyms MUST be in their BARE ROOT forms (lemmas). Do NOT use inflected forms like '-ing' or '-ed'.
    - Do NOT add explanations or parenthetical notes after words.
    - Comma-separated, no extra punctuation.''',
     };
@@ -262,7 +259,7 @@ Mode: Academy
   static String validationSystem({
     required String word,
     required ContextMode mode,
-    required WordType wordType,
+    required PartOfSpeech partOfSpeech,
     String? context,
   }) {
     final contextBlock = (context != null && context.trim().isNotEmpty)
@@ -278,12 +275,22 @@ Role: Quality-control reviewer for an English vocabulary app (A1 learners).
 You will receive a generated word card. Evaluate each field and fix any issues.
 
 WORD: "$word"
-TYPE: ${wordType.description}
+TYPE: ${partOfSpeech.description}
 MODE: ${mode.label}$contextBlock
 
 ─── VALIDATION RULES ───────────────────────────────────────
 
 1. WORD INTEGRITY
+   - DEFAULT RULE: ALWAYS strip inflectional suffixes (-ing, -ed, -s, -er, -est) and return the BARE dictionary root (lemma). This is non-negotiable.
+     ✅ "running" → "run"  ✅ "played" → "play"  ✅ "eats" → "eat"
+   - EXCEPTIONS (preserve only if you are 100% certain):
+     * TRUE ADJECTIVE ending in -ing: Only if the word is exclusively used as an adjective (e.g. "interesting", "boring", "amazing") — NOT a verb in continuous tense.
+     * ADVERBS ending in -ly: PRESERVE EXACTLY AS IS. (e.g. "quickly", "beautifully")
+     * ESTABLISHED NON-VERB NOUN: Only if the -ing word is a standalone dictionary noun with no verb equivalent (e.g. "meaning", "feeling" as a noun). In all other cases, default to the verb root.
+     * Possessives ('s, s') → strip possessive marker.
+     * Regular Plurals → singular.
+     * Irregular Plurals → PRESERVE EXACTLY AS IS.
+   - WARNING: Do NOT classify a verb in continuous tense as a Gerund just because it ends in -ing. Check the CONTEXT to determine if it is truly a gerund/noun or just a continuous verb. If ambiguous, DEFAULT to stripping and returning the verb root.
    - If type is phrasal_verb or idiom, the "word" field must be the full phrase intact.
    - A single particle ("up", "out") or split form is WRONG.
    ✅ "give up"  ❌ "give" or "up"
@@ -291,17 +298,22 @@ MODE: ${mode.label}$contextBlock
 2. DEFINITION — CEFR A1
    - Max 12 words. Uses only basic, everyday English.
    - No academic jargon, no complex grammar terms.
-   - Must describe the meaning of "$word" specifically, not a related concept.
+   - Must describe the BARE ROOT form (the lemma) of "$word", not an inflected form.
    ${contextBlock.isNotEmpty ? '- Must reflect the provided CONTEXT above.' : ''}
 
 3. TRANSLATION — Turkish, 1–4 words
    - Must be a Turkish word or very short phrase. NO full sentences.
+   - MUST translate the BARE ROOT form. Do NOT add tenses or personal suffixes.
    - Must match the specific meaning of "$word" in context.
-   ✅ "yorulmak"   ❌ "bir şeyden çok yorulmak"
+   ✅ "yorulmak"   ❌ "bir şeyden çok yorulmak", "yoruldu", "koşuyor"
    ${contextBlock.isNotEmpty ? '- Must reflect the provided CONTEXT above.' : ''}
 
 4. CONTEXTUAL_INFO — depends on mode:
    ${_contextualInfoValidationRule(mode)}
+
+5. PART_OF_SPEECH
+   - MUST be exactly one of: "noun", "verb", "adjective", "adverb", "pronoun", "preposition", "conjunction", "interjection", "phrasal_verb", "idiom", "collocation", "proverb".
+   - If missing or invalid, fix it by determining the actual part of speech.
 
 ─── OUTPUT ─────────────────────────────────────────────────
 
@@ -310,10 +322,12 @@ Return STRICTLY valid JSON, no markdown:
   "valid": true | false,
   "issues": ["short description of each problem found, or empty list if valid"],
   "fixed": {
+    "word_structure_analysis": "Analyze the grammar structure of the exact word as it appears in context. Explain why it should be lemmatized or preserved before determining 'word'.",
     "word": "...",
     "definition": "...",
     "translation": "...",
-    "contextual_info": "..."
+    "contextual_info": "...",
+    "part_of_speech": "..."
   }
 }
 
@@ -325,20 +339,24 @@ Return STRICTLY valid JSON, no markdown:
 
   static String _contextualInfoValidationRule(ContextMode mode) =>
       switch (mode) {
-        ContextMode.cinema => '''
+        ContextMode.cinema =>
+          '''
 CINEMA MODE: Must be plain text in format [Title (Year)]: "quote"
    - Quote must contain the word or its inflected form.
    - Must NOT be a JSON object or nested structure.
    - If fabricated, must be marked [Fictional Example].''',
-        ContextMode.practical => '''
+        ContextMode.practical =>
+          '''
 PRACTICAL MODE: Must be plain text in format [Setting]: "example sentence"
    - Must NOT be a JSON object or nested structure.
    - Must sound natural. Max 15 words for the sentence.''',
-        ContextMode.academy => '''
+        ContextMode.academy =>
+          '''
 ACADEMY MODE: Must be plain text in this format:
    Synonyms: word1, word2, word3
    Antonyms: word1, word2  (omit only if truly none)
    - At least 2 synonyms required.
+   - Synonyms and antonyms MUST be in their BARE ROOT forms (lemmas). Do NOT use inflected forms like '-ing' or '-ed'.
    - No explanations or parenthetical notes after words.
    - Must NOT be a JSON object or nested structure.''',
       };
@@ -395,18 +413,18 @@ class AIService {
 
   // ── Public API ──────────────────────────────
 
-  Future<Map<String, dynamic>> generateSmartWord(
+  Future<Word> generateSmartWord(
     String inputWord,
     String? userDefinition,
     String collectionId, {
     String contextType = 'Academy',
-    String wordType = 'word',
+    String providedPartOfSpeech = 'unknown',
   }) async {
     final word = inputWord.trim();
     if (word.isEmpty) throw const AIGenerationException('Kelime boş olamaz.');
 
     final mode = ContextModeX.fromString(contextType);
-    final type = WordType.fromString(wordType);
+    final type = PartOfSpeech.fromString(providedPartOfSpeech);
 
     final parsed = userDefinition != null && userDefinition.trim().isNotEmpty
         ? _parseUserInput(userDefinition)
@@ -419,39 +437,42 @@ class AIService {
     final aiData = await _fetchWordDetails(
       word,
       mode: mode,
-      wordType: type,
+      partOfSpeech: type,
       existingDefinition: parsed['definition'],
       existingTranslation: parsed['translation'],
       existingContextualInfo: parsed['contextual_info'],
       context: userDefinition,
     );
 
-    return {
-      'collection_id': collectionId,
-      'word': aiData['word'],
-      'definition': aiData['definition'],
-      'translation': aiData['translation'],
-      'contextual_info': aiData['contextual_info'],
-    };
+    return Word(
+      collectionId: collectionId,
+      word: aiData['word']?.toString() ?? '',
+      definition: aiData['definition']?.toString() ?? '',
+      translation: aiData['translation']?.toString() ?? '',
+      contextualInfo: aiData['contextual_info']?.toString() ?? '',
+      partOfSpeech: PartOfSpeech.fromString(
+        aiData['part_of_speech']?.toString(),
+      ),
+    );
   }
 
-  Future<List<Map<String, String>>> extractWordsFromImage(XFile imageFile) async {
+  Future<List<Map<String, String>>> extractWordsFromImage(
+    XFile imageFile,
+  ) async {
     final bytes = await imageFile.readAsBytes();
     final base64Image = base64Encode(bytes);
 
     final payload = {
       'model': 'gpt-4o',
       'messages': [
-        {
-          'role': 'system',
-          'content': _PromptBuilder.imageExtractionSystem(),
-        },
+        {'role': 'system', 'content': _PromptBuilder.imageExtractionSystem()},
         {
           'role': 'user',
           'content': [
             {
               'type': 'text',
-              'text': 'Extract ALL marked vocabulary items. Keep phrasal verbs and multi-word expressions as single units.',
+              'text':
+                  'Extract ALL marked vocabulary items. Keep phrasal verbs and multi-word expressions as single units.',
             },
             {
               'type': 'image_url',
@@ -474,16 +495,18 @@ class AIService {
     );
 
     final content = response['choices'][0]['message']['content'] as String?;
-    if (content == null || content.trim().isEmpty) throw const AIEmptyResponseException();
+    if (content == null || content.trim().isEmpty)
+      throw const AIEmptyResponseException();
 
     final decoded = _decodeJson(content);
     final items = decoded['items'];
-    if (items is! List) throw AIParseException('Beklenen "items" listesi bulunamadı.');
+    if (items is! List)
+      throw AIParseException('Beklenen "items" listesi bulunamadı.');
 
     return items
         .map<Map<String, String>>((e) {
-          final word    = e['word']?.toString().trim() ?? '';
-          final type    = e['type']?.toString().trim() ?? 'word';
+          final word = e['word']?.toString().trim() ?? '';
+          final type = e['type']?.toString().trim() ?? 'word';
           final context = e['context']?.toString().trim() ?? '';
           final enrichedContext = type != 'word' ? '[$type] $context' : context;
           return {'word': word, 'context': enrichedContext, 'type': type};
@@ -497,7 +520,7 @@ class AIService {
   Future<Map<String, dynamic>> _fetchWordDetails(
     String word, {
     required ContextMode mode,
-    required WordType wordType,
+    required PartOfSpeech partOfSpeech,
     String? existingDefinition,
     String? existingTranslation,
     String? existingContextualInfo,
@@ -506,14 +529,17 @@ class AIService {
     final inputIsSentence = _isSentence(word);
 
     // Treat bare sentence input as context if no explicit context given
-    final resolvedContext = (inputIsSentence && !wordType.isMultiWord && (context == null || context.trim().isEmpty))
+    final resolvedContext =
+        (inputIsSentence &&
+            !partOfSpeech.isMultiWord &&
+            (context == null || context.trim().isEmpty))
         ? word
         : context;
 
     final systemPrompt = _PromptBuilder.wordDefinitionSystem(
       word: word,
       mode: mode,
-      wordType: wordType,
+      partOfSpeech: partOfSpeech,
       existingDefinition: existingDefinition,
       existingTranslation: existingTranslation,
       existingContextualInfo: existingContextualInfo,
@@ -521,7 +547,7 @@ class AIService {
       inputIsSentence: inputIsSentence,
     );
 
-    final userContent = _buildUserMessage(word, resolvedContext, wordType);
+    final userContent = _buildUserMessage(word, resolvedContext, partOfSpeech);
 
     try {
       // ── Step 1: Generate ──────────────────────
@@ -530,19 +556,33 @@ class AIService {
         messages: [
           OpenAIChatCompletionChoiceMessageModel(
             role: OpenAIChatMessageRole.system,
-            content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(systemPrompt)],
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text(
+                systemPrompt,
+              ),
+            ],
           ),
           OpenAIChatCompletionChoiceMessageModel(
             role: OpenAIChatMessageRole.user,
-            content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(userContent)],
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text(
+                userContent,
+              ),
+            ],
           ),
         ],
         temperature: 0.4,
         responseFormat: {'type': 'json_object'},
       );
 
-      final raw = chatCompletion.choices.firstOrNull?.message.content?.first.text;
-      if (raw == null || raw.trim().isEmpty) throw const AIEmptyResponseException();
+      final raw =
+          chatCompletion.choices.firstOrNull?.message.content?.first.text;
+      if (raw == null || raw.trim().isEmpty)
+        throw const AIEmptyResponseException();
+
+      // DEBUG LOG
+      // ignore: avoid_print
+      print('\x1B[36m[AIService - GENERATOR (Stage 1)]\n$raw\x1B[0m');
 
       final generated = _sanitizeWordData(_decodeJson(raw));
 
@@ -551,7 +591,7 @@ class AIService {
         generated: generated,
         word: word,
         mode: mode,
-        wordType: wordType,
+        partOfSpeech: partOfSpeech,
         context: resolvedContext, // ← context artık validator'a da gidiyor
       );
 
@@ -574,14 +614,14 @@ class AIService {
     required Map<String, dynamic> generated,
     required String word,
     required ContextMode mode,
-    required WordType wordType,
+    required PartOfSpeech partOfSpeech,
     String? context, // ← yeni parametre
   }) async {
     try {
       final validationPrompt = _PromptBuilder.validationSystem(
         word: word,
         mode: mode,
-        wordType: wordType,
+        partOfSpeech: partOfSpeech,
         context: context, // ← prompt'a aktarılıyor
       );
 
@@ -592,13 +632,19 @@ class AIService {
         messages: [
           OpenAIChatCompletionChoiceMessageModel(
             role: OpenAIChatMessageRole.system,
-            content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(validationPrompt)],
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text(
+                validationPrompt,
+              ),
+            ],
           ),
           OpenAIChatCompletionChoiceMessageModel(
             role: OpenAIChatMessageRole.user,
-            content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(
-              'Review and fix this word card:\n$cardJson',
-            )],
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text(
+                'Review and fix this word card:\n$cardJson',
+              ),
+            ],
           ),
         ],
         temperature: 0.2,
@@ -606,6 +652,13 @@ class AIService {
       );
 
       final raw = completion.choices.firstOrNull?.message.content?.first.text;
+
+      // DEBUG LOG
+      if (raw != null && raw.trim().isNotEmpty) {
+        // ignore: avoid_print
+        print('\x1B[32m[AIService - VALIDATOR (Stage 2)]\n$raw\x1B[0m');
+      }
+
       if (raw == null || raw.trim().isEmpty) {
         _logValidationFailure(word, 'Empty validator response');
         return generated;
@@ -631,7 +684,7 @@ class AIService {
 
   void _logValidationFailure(String word, String reason) {
     // ignore: avoid_print
-    print('[AIService] Validation issue for "$word": $reason');
+    print('\x1B[31m[AIService - VALIDATION ERROR] "$word": $reason\x1B[0m');
   }
 
   // ── Private: Input parsing ──────────────────
@@ -647,7 +700,9 @@ class AIService {
     };
 
     // "word: definition" or "word - translation"
-    final colonMatch = RegExp(r'^([a-zA-Z\s-]+)[:|-]\s*(.+)$').firstMatch(trimmed);
+    final colonMatch = RegExp(
+      r'^([a-zA-Z\s-]+)[:|-]\s*(.+)$',
+    ).firstMatch(trimmed);
     if (colonMatch != null) {
       final rest = colonMatch.group(2)!.trim();
       result['word'] = colonMatch.group(1)!.trim();
@@ -661,7 +716,9 @@ class AIService {
     }
 
     // "word (translation)"
-    final parenMatch = RegExp(r'^([a-zA-Z\s-]+)\s*[\(\[](.+?)[\)\]]').firstMatch(trimmed);
+    final parenMatch = RegExp(
+      r'^([a-zA-Z\s-]+)\s*[\(\[](.+?)[\)\]]',
+    ).firstMatch(trimmed);
     if (parenMatch != null) {
       result['word'] = parenMatch.group(1)!.trim();
       result['translation'] = parenMatch.group(2)!.trim();
@@ -695,13 +752,17 @@ class AIService {
     return words.length > 3 || RegExp(r'[.!?,]').hasMatch(text);
   }
 
-  String _buildUserMessage(String word, String? context, WordType wordType) {
+  String _buildUserMessage(
+    String word,
+    String? context,
+    PartOfSpeech partOfSpeech,
+  ) {
     final parts = ['Word: $word'];
     if (context != null && context.trim().isNotEmpty) {
       parts.add('Context: $context');
     }
-    if (wordType.isMultiWord) {
-      parts.add('Type: ${wordType.description} — treat as a single unit.');
+    if (partOfSpeech.isMultiWord) {
+      parts.add('Type: ${partOfSpeech.description} — treat as a single unit.');
     }
     return parts.join('\n');
   }
@@ -718,12 +779,26 @@ class AIService {
       data['translation'] = _trimTranslation(rawTranslation);
     }
 
+    // --- part_of_speech normalize ---
+    final rawPos = data['part_of_speech'];
+    final posEnum = PartOfSpeech.fromString(rawPos?.toString());
+
+    if (posEnum == PartOfSpeech.unknown && rawPos != null) {
+      // ignore: avoid_print
+      print('[AIService] Warning: Unknown part_of_speech received: $rawPos');
+    }
+
+    data['part_of_speech'] = posEnum.apiValue;
+
     return data;
   }
 
   String _flattenToString(dynamic value) {
     if (value is String) return value;
-    if (value is Map)  return value.entries.map((e) => '${e.key}: ${_flattenToString(e.value)}').join(' | ');
+    if (value is Map)
+      return value.entries
+          .map((e) => '${e.key}: ${_flattenToString(e.value)}')
+          .join(' | ');
     if (value is List) return value.map(_flattenToString).join(', ');
     return value.toString();
   }
@@ -735,7 +810,10 @@ class AIService {
   }
 
   Map<String, dynamic> _decodeJson(String raw) {
-    final clean = raw.trim().replaceAll(RegExp(r'^```json|```$', multiLine: true), '').trim();
+    final clean = raw
+        .trim()
+        .replaceAll(RegExp(r'^```json|```$', multiLine: true), '')
+        .trim();
     try {
       return jsonDecode(clean) as Map<String, dynamic>;
     } catch (e) {
@@ -743,7 +821,10 @@ class AIService {
     }
   }
 
-  Future<Map<String, dynamic>> _post(Uri url, Map<String, dynamic> payload) async {
+  Future<Map<String, dynamic>> _post(
+    Uri url,
+    Map<String, dynamic> payload,
+  ) async {
     try {
       final response = await http.post(
         url,
@@ -755,10 +836,12 @@ class AIService {
       );
 
       return switch (response.statusCode) {
-        200   => jsonDecode(response.body) as Map<String, dynamic>,
-        401   => throw const AIAuthException(),
-        429   => throw const AIRateLimitException(),
-        _     => throw AIGenerationException('HTTP ${response.statusCode}: ${response.body}'),
+        200 => jsonDecode(response.body) as Map<String, dynamic>,
+        401 => throw const AIAuthException(),
+        429 => throw const AIRateLimitException(),
+        _ => throw AIGenerationException(
+          'HTTP ${response.statusCode}: ${response.body}',
+        ),
       };
     } on AIException {
       rethrow;

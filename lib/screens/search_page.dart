@@ -53,26 +53,26 @@ class _SearchPageState extends State<SearchPage>
   }
 
   void _subscribeToAccessibleCollections() {
-    final userProfileStream =
-        _dbService.getUserProfileStream().asBroadcastStream();
+    final userProfileStream = _dbService
+        .getUserProfileStream()
+        .asBroadcastStream();
 
-    final Stream<List<Collection>> stream =
-        userProfileStream.switchMap((UserProfile? profile) {
+    final Stream<List<Collection>> stream = userProfileStream.switchMap((
+      UserProfile? profile,
+    ) {
       final editableStream = _dbService.getEditableCollectionsStream();
 
       if (profile != null && profile.subscribedCollections.isNotEmpty) {
-        final subStream =
-            _dbService.getSubscribedCollectionsStream(profile);
-        return Rx.combineLatest2(
-          editableStream,
-          subStream,
-          (List<Collection> editable, List<Collection> subs) {
-            final combined = <String, Collection>{};
-            for (var c in editable) combined[c.id!] = c;
-            for (var c in subs) combined[c.id!] = c;
-            return combined.values.toList();
-          },
-        );
+        final subStream = _dbService.getSubscribedCollectionsStream(profile);
+        return Rx.combineLatest2(editableStream, subStream, (
+          List<Collection> editable,
+          List<Collection> subs,
+        ) {
+          final combined = <String, Collection>{};
+          for (var c in editable) combined[c.id!] = c;
+          for (var c in subs) combined[c.id!] = c;
+          return combined.values.toList();
+        });
       }
       return editableStream;
     });
@@ -87,8 +87,9 @@ class _SearchPageState extends State<SearchPage>
   }
 
   void _subscribeToEditableIds() {
-    _editableIdsSub =
-        _dbService.getEditableCollectionsStream().listen((collections) {
+    _editableIdsSub = _dbService.getEditableCollectionsStream().listen((
+      collections,
+    ) {
       if (mounted) {
         setState(() {
           _editableCollectionIds = collections.map((c) => c.id!).toSet();
@@ -128,8 +129,7 @@ class _SearchPageState extends State<SearchPage>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title:
-            const Text("Delete Word", style: TextStyle(color: Colors.white)),
+        title: const Text("Delete Word", style: TextStyle(color: Colors.white)),
         content: Text(
           "Are you sure you want to delete '${word.word}'?",
           style: const TextStyle(color: Colors.white70),
@@ -137,8 +137,7 @@ class _SearchPageState extends State<SearchPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child:
-                const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -175,8 +174,7 @@ class _SearchPageState extends State<SearchPage>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title:
-            const Text("Edit Word", style: TextStyle(color: Colors.white)),
+        title: const Text("Edit Word", style: TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -194,12 +192,10 @@ class _SearchPageState extends State<SearchPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
             onPressed: () async {
               if (wordCtrl.text.isNotEmpty && trCtrl.text.isNotEmpty) {
                 Word updatedWord = Word(
@@ -215,8 +211,7 @@ class _SearchPageState extends State<SearchPage>
                 _performSearch();
               }
             },
-            child:
-                const Text("Save", style: TextStyle(color: Colors.white)),
+            child: const Text("Save", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -291,16 +286,20 @@ class _SearchPageState extends State<SearchPage>
                     Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.edit,
-                              color: Colors.blueAccent),
+                          icon: const Icon(
+                            Icons.edit,
+                            color: Colors.blueAccent,
+                          ),
                           onPressed: () {
                             Navigator.pop(context);
                             _editWord(word);
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete,
-                              color: Colors.redAccent),
+                          icon: const Icon(
+                            Icons.delete,
+                            color: Colors.redAccent,
+                          ),
                           onPressed: () {
                             Navigator.pop(context);
                             _deleteWord(word);
@@ -323,13 +322,15 @@ class _SearchPageState extends State<SearchPage>
               const Divider(color: Colors.white24),
               const SizedBox(height: 20),
               if (word.definition.isNotEmpty) ...[
-                _buildDetailRow(
-                    Icons.menu_book, "Definition", word.definition),
+                _buildDetailRow(Icons.menu_book, "Definition", word.definition),
                 const SizedBox(height: 20),
               ],
               if (word.contextualInfo.isNotEmpty) ...[
-                _buildDetailRow(Icons.format_quote_rounded, "Example",
-                    word.contextualInfo),
+                _buildDetailRow(
+                  Icons.format_quote_rounded,
+                  "Example",
+                  word.contextualInfo,
+                ),
               ],
               const SizedBox(height: 20),
             ],
@@ -401,186 +402,176 @@ class _SearchPageState extends State<SearchPage>
             children: [
               const SizedBox(height: 10),
 
-                // Search Field
-                TextField(
-                  controller: _searchController,
-                  onChanged: _onSearchChanged,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: "Search words...",
-                    hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.3),
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search,
-                      color: Colors.deepPurpleAccent,
-                    ),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? GestureDetector(
-                            onTap: () {
-                              _searchController.clear();
-                              _onSearchChanged('');
-                            },
-                            child: const Icon(
-                              Icons.close,
-                              color: Colors.white54,
-                              size: 20,
-                            ),
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: const Color(0xFF1E1E1E),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 20,
-                    ),
+              // Search Field
+              TextField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: "Search words...",
+                  hintStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.3),
                   ),
-                ),
-
-                const SizedBox(height: 15),
-
-                MultiSelectDropdown(
-                  items: _accessibleCollections.map((c) => c.name).toList(),
-                  selectedItems: _accessibleCollections
-                      .where((c) => _selectedCollectionIds.contains(c.id))
-                      .map((c) => c.name)
-                      .toList(),
-                  hint: "Filter by Collection (All)",
-                  onChanged: (List<String> newSelectedNames) {
-                    setState(() {
-                      _selectedCollectionIds = _accessibleCollections
-                          .where((c) => newSelectedNames.contains(c.name))
-                          .map((c) => c.id!)
-                          .toList();
-                    });
-                    _performSearch();
-                  },
-                ),
-
-                const SizedBox(height: 15),
-
-                Expanded(
-                  child: RefreshIndicator(
+                  prefixIcon: const Icon(
+                    Icons.search,
                     color: Colors.deepPurpleAccent,
-                    backgroundColor: const Color(0xFF1E1E1E),
-                    onRefresh: () async => await _performSearch(),
-                    child: _isLoading
-                        ? const Center(
-                            child: CircularProgressIndicator(
-                              color: Colors.deepPurpleAccent,
-                            ),
-                          )
-                        : _searchResults.isEmpty
-                            ? ListView(
-                                physics:
-                                    const AlwaysScrollableScrollPhysics(),
-                                children: [
-                                  SizedBox(
-                                    height: MediaQuery.of(context).size.height *
-                                        0.2,
-                                  ),
-                                  Column(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.search_off,
-                                        size: 60,
-                                        color: Colors.white
-                                            .withValues(alpha: 0.1),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Text(
-                                        "No words found.",
-                                        style: TextStyle(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.3),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              )
-                            : ListView.builder(
-                                itemCount: _searchResults.length,
-                                physics:
-                                    const AlwaysScrollableScrollPhysics(),
-                                itemBuilder: (context, index) {
-                                  final word = _searchResults[index];
-                                  return Card(
-                                    color: const Color(0xFF1E1E1E),
-                                    margin:
-                                        const EdgeInsets.only(bottom: 10),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                    ),
-                                    child: ListTile(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 5,
-                                      ),
-                                      onTap: () => _showWordDetails(word),
-                                      title: Text(
-                                        word.word,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        word.translation,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            color: Colors.white70),
-                                      ),
-                                      trailing: _editableCollectionIds
-                                              .contains(word.collectionId)
-                                          ? Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.edit,
-                                                    size: 20,
-                                                    color: Colors.blueGrey,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _editWord(word),
-                                                  visualDensity:
-                                                      VisualDensity.compact,
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.delete,
-                                                    size: 20,
-                                                    color: Colors.redAccent,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _deleteWord(word),
-                                                  visualDensity:
-                                                      VisualDensity.compact,
-                                                ),
-                                              ],
-                                            )
-                                          : null,
-                                    ),
-                                  );
-                                },
-                              ),
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () {
+                            _searchController.clear();
+                            _onSearchChanged('');
+                          },
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white54,
+                            size: 20,
+                          ),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFF1E1E1E),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 20,
                   ),
                 ),
-              ],
-            ),
+              ),
+
+              const SizedBox(height: 15),
+
+              MultiSelectDropdown(
+                items: _accessibleCollections.map((c) => c.name).toList(),
+                selectedItems: _accessibleCollections
+                    .where((c) => _selectedCollectionIds.contains(c.id))
+                    .map((c) => c.name)
+                    .toList(),
+                hint: "Filter by Collection (All)",
+                onChanged: (List<String> newSelectedNames) {
+                  setState(() {
+                    _selectedCollectionIds = _accessibleCollections
+                        .where((c) => newSelectedNames.contains(c.name))
+                        .map((c) => c.id!)
+                        .toList();
+                  });
+                  _performSearch();
+                },
+              ),
+
+              const SizedBox(height: 15),
+
+              Expanded(
+                child: RefreshIndicator(
+                  color: Colors.deepPurpleAccent,
+                  backgroundColor: const Color(0xFF1E1E1E),
+                  onRefresh: () async => await _performSearch(),
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.deepPurpleAccent,
+                          ),
+                        )
+                      : _searchResults.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.2,
+                            ),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.search_off,
+                                  size: 60,
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  "No words found.",
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          itemCount: _searchResults.length,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemBuilder: (context, index) {
+                            final word = _searchResults[index];
+                            return Card(
+                              color: const Color(0xFF1E1E1E),
+                              margin: const EdgeInsets.only(bottom: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 5,
+                                ),
+                                onTap: () => _showWordDetails(word),
+                                title: Text(
+                                  word.word,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  word.translation,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white70),
+                                ),
+                                trailing:
+                                    _editableCollectionIds.contains(
+                                      word.collectionId,
+                                    )
+                                    ? Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.edit,
+                                              size: 20,
+                                              color: Colors.blueGrey,
+                                            ),
+                                            onPressed: () => _editWord(word),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete,
+                                              size: 20,
+                                              color: Colors.redAccent,
+                                            ),
+                                            onPressed: () => _deleteWord(word),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                          ),
+                                        ],
+                                      )
+                                    : null,
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
   }
 }

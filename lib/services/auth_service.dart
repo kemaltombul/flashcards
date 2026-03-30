@@ -35,10 +35,10 @@ class AuthService {
 
       // Once signed in, return the UserCredential
       final userCredential = await _auth.signInWithCredential(credential);
-      
+
       // Create user profile immediately upon successful login
       await FirestoreService().createUserProfile();
-      
+
       return userCredential;
     } catch (e) {
       if (kDebugMode) {

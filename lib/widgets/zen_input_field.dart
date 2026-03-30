@@ -30,10 +30,7 @@ class ZenInputField extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppTheme.radiusXl),
       child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: 5,
-          sigmaY: 5,
-        ),
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
         child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppTheme.spacingL,
@@ -82,11 +79,7 @@ class ZenInputField extends StatelessWidget {
                     },
                     child: const Padding(
                       padding: EdgeInsets.only(left: 8.0),
-                      child: Icon(
-                        Icons.close,
-                        color: Colors.white38,
-                        size: 18,
-                      ),
+                      child: Icon(Icons.close, color: Colors.white38, size: 18),
                     ),
                   );
                 },

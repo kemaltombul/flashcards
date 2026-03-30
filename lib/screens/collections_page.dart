@@ -13,7 +13,7 @@ import '../dialogs/manage_editors_dialog.dart';
 import 'flashcard_page.dart';
 import 'search_page.dart';
 import 'profile_page.dart';
-import 'logs_page.dart';                      // ← YENİ
+import 'logs_page.dart'; // ← YENİ
 import '../dialogs/scan_dialog.dart';
 import '../services/ai_service.dart';
 import 'package:rxdart/rxdart.dart';
@@ -55,19 +55,18 @@ class _CollectionsPageState extends State<CollectionsPage>
       final ownedStream = _dbService.getEditableCollectionsStream();
       if (profile != null && profile.subscribedCollections.isNotEmpty) {
         final subStream = _dbService.getSubscribedCollectionsStream(profile);
-        return Rx.combineLatest2(
-          ownedStream,
-          subStream,
-          (List<Collection> owned, List<Collection> subs) {
-            final combined = [...owned, ...subs];
-            combined.sort((a, b) {
-              final aTime = a.createdAt ?? DateTime(2000);
-              final bTime = b.createdAt ?? DateTime(2000);
-              return bTime.compareTo(aTime);
-            });
-            return combined;
-          },
-        );
+        return Rx.combineLatest2(ownedStream, subStream, (
+          List<Collection> owned,
+          List<Collection> subs,
+        ) {
+          final combined = [...owned, ...subs];
+          combined.sort((a, b) {
+            final aTime = a.createdAt ?? DateTime(2000);
+            final bTime = b.createdAt ?? DateTime(2000);
+            return bTime.compareTo(aTime);
+          });
+          return combined;
+        });
       } else {
         return ownedStream;
       }
@@ -79,13 +78,18 @@ class _CollectionsPageState extends State<CollectionsPage>
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         const curve = Curves.easeInOutCubic;
-        var fadeAnimation = Tween(begin: 0.0, end: 1.0)
-            .animate(CurvedAnimation(parent: animation, curve: curve));
-        var scaleAnimation = Tween(begin: 0.95, end: 1.0)
-            .animate(CurvedAnimation(parent: animation, curve: curve));
+        var fadeAnimation = Tween(
+          begin: 0.0,
+          end: 1.0,
+        ).animate(CurvedAnimation(parent: animation, curve: curve));
+        var scaleAnimation = Tween(
+          begin: 0.95,
+          end: 1.0,
+        ).animate(CurvedAnimation(parent: animation, curve: curve));
         return FadeTransition(
-            opacity: fadeAnimation,
-            child: ScaleTransition(scale: scaleAnimation, child: child));
+          opacity: fadeAnimation,
+          child: ScaleTransition(scale: scaleAnimation, child: child),
+        );
       },
       transitionDuration: const Duration(milliseconds: 500),
     );
@@ -104,21 +108,25 @@ class _CollectionsPageState extends State<CollectionsPage>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: Text('Subscribe to Collection',
-            style: _textStyle.copyWith(fontWeight: FontWeight.bold)),
+        title: Text(
+          'Subscribe to Collection',
+          style: _textStyle.copyWith(fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: codeController,
           autofocus: true,
           maxLength: 6,
           textCapitalization: TextCapitalization.characters,
           style: const TextStyle(
-              color: Colors.white, fontSize: 24, letterSpacing: 5),
+            color: Colors.white,
+            fontSize: 24,
+            letterSpacing: 5,
+          ),
           textAlign: TextAlign.center,
           decoration: InputDecoration(
             hintText: 'XXXXXX',
             hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-            border:
-                OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
             filled: true,
             fillColor: Colors.black12,
           ),
@@ -126,13 +134,17 @@ class _CollectionsPageState extends State<CollectionsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade400)),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey.shade400),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFBB86FC),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
+                borderRadius: BorderRadius.circular(20),
+              ),
             ),
             onPressed: () async {
               final code = codeController.text.trim();
@@ -140,21 +152,28 @@ class _CollectionsPageState extends State<CollectionsPage>
               Navigator.pop(ctx);
               bool success = await _dbService.subscribeByShareCode(code);
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(
-                    success
-                        ? 'Successfully subscribed!'
-                        : 'Invalid Code or Collection is Private.',
-                    style: const TextStyle(color: Colors.black),
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      success
+                          ? 'Successfully subscribed!'
+                          : 'Invalid Code or Collection is Private.',
+                      style: const TextStyle(color: Colors.black),
+                    ),
+                    backgroundColor: success
+                        ? Colors.greenAccent
+                        : Colors.redAccent,
                   ),
-                  backgroundColor:
-                      success ? Colors.greenAccent : Colors.redAccent,
-                ));
+                );
               }
             },
-            child: const Text('Subscribe',
-                style: TextStyle(
-                    color: Colors.black, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Subscribe',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -222,20 +241,30 @@ class _CollectionsPageState extends State<CollectionsPage>
                       floating: false,
                       pinned: false,
                       flexibleSpace: FlexibleSpaceBar(
-                        titlePadding: const EdgeInsets.only(left: 24, bottom: 16),
+                        titlePadding: const EdgeInsets.only(
+                          left: 24,
+                          bottom: 16,
+                        ),
                         title: Column(
                           mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.end,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(_getGreeting(),
-                                style: _textStyle.copyWith(
-                                    fontSize: 14,
-                                    color: Colors.white70,
-                                    fontWeight: FontWeight.normal)),
-                            Text(_getUserName(),
-                                style: _textStyle.copyWith(
-                                    fontSize: 28, fontWeight: FontWeight.w300)),
+                            Text(
+                              _getGreeting(),
+                              style: _textStyle.copyWith(
+                                fontSize: 14,
+                                color: Colors.white70,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                            Text(
+                              _getUserName(),
+                              style: _textStyle.copyWith(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w300,
+                              ),
+                            ),
                             const SizedBox(height: 8),
                             StreamBuilder<int>(
                               stream: _streakStream,
@@ -248,30 +277,37 @@ class _CollectionsPageState extends State<CollectionsPage>
                                 return Container(
                                   margin: const EdgeInsets.only(top: 8),
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF2C1E10),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                        color: badgeColor.withOpacity(0.3)),
+                                      color: badgeColor.withOpacity(0.3),
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(
                                         hasStreak
-                                            ? Icons.local_fire_department_rounded
+                                            ? Icons
+                                                  .local_fire_department_rounded
                                             : Icons
-                                                .local_fire_department_outlined,
+                                                  .local_fire_department_outlined,
                                         color: badgeColor,
                                         size: 14,
                                       ),
                                       const SizedBox(width: 4),
-                                      Text('$streak Day Streak',
-                                          style: TextStyle(
-                                              color: badgeColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11)),
+                                      Text(
+                                        '$streak Day Streak',
+                                        style: TextStyle(
+                                          color: badgeColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 );
@@ -289,15 +325,19 @@ class _CollectionsPageState extends State<CollectionsPage>
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            icon: const Icon(Icons.search_rounded,
-                                color: Colors.white70, size: 24),
+                            icon: const Icon(
+                              Icons.search_rounded,
+                              color: Colors.white70,
+                              size: 24,
+                            ),
                             tooltip: 'Search Words',
                             onPressed: () {
                               Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const SearchPage()));
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const SearchPage(),
+                                ),
+                              );
                             },
                           ),
                         ),
@@ -308,8 +348,11 @@ class _CollectionsPageState extends State<CollectionsPage>
                             shape: BoxShape.circle,
                           ),
                           child: PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert,
-                                color: Colors.white70, size: 24),
+                            icon: const Icon(
+                              Icons.more_vert,
+                              color: Colors.white70,
+                              size: 24,
+                            ),
                             color: _cardColor,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(15),
@@ -323,59 +366,89 @@ class _CollectionsPageState extends State<CollectionsPage>
                                   _showSubscribeDialog();
                                 case 'profile':
                                   Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              const ProfilePage()));
-                                case 'logs':                          // ← YENİ
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const ProfilePage(),
+                                    ),
+                                  );
+                                case 'logs': // ← YENİ
                                   Navigator.push(
-                                      context,
-                                      _createFluidRoute(const LogsPage()));
+                                    context,
+                                    _createFluidRoute(const LogsPage()),
+                                  );
                               }
                             },
                             itemBuilder: (context) => [
                               PopupMenuItem(
                                 value: 'profile',
-                                child: Row(children: [
-                                  Icon(Icons.person_outline_rounded,
-                                      color: _accentColor, size: 20),
-                                  const SizedBox(width: 12),
-                                  const Text('Profile',
-                                      style: TextStyle(color: Colors.white)),
-                                ]),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.person_outline_rounded,
+                                      color: _accentColor,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'Profile',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
                               ),
                               PopupMenuItem(
                                 value: 'add',
-                                child: Row(children: [
-                                  Icon(Icons.create_new_folder_outlined,
-                                      color: _accentColor, size: 20),
-                                  const SizedBox(width: 12),
-                                  const Text('New Collection',
-                                      style: TextStyle(color: Colors.white)),
-                                ]),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.create_new_folder_outlined,
+                                      color: _accentColor,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'New Collection',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
                               ),
                               PopupMenuItem(
                                 value: 'subscribe',
-                                child: Row(children: [
-                                  const Icon(Icons.group_add_outlined,
-                                      color: Colors.greenAccent, size: 20),
-                                  const SizedBox(width: 12),
-                                  const Text('Subscribe via Code',
-                                      style: TextStyle(color: Colors.white)),
-                                ]),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.group_add_outlined,
+                                      color: Colors.greenAccent,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'Subscribe via Code',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
                               ),
                               // ── Logs girişi — sadece admin ─────────
                               if (FirebaseAuth.instance.currentUser?.uid ==
                                   'CQk9Sf8MK4VwyBkQNjYK3ZdlzL13')
                                 PopupMenuItem(
                                   value: 'logs',
-                                  child: Row(children: [
-                                    const Icon(Icons.terminal_rounded,
-                                        color: Colors.white38, size: 20),
-                                    const SizedBox(width: 12),
-                                    const Text('App Logs',
-                                        style: TextStyle(color: Colors.white54)),
-                                  ]),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.terminal_rounded,
+                                        color: Colors.white38,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        'App Logs',
+                                        style: TextStyle(color: Colors.white54),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                             ],
                           ),
@@ -392,40 +465,47 @@ class _CollectionsPageState extends State<CollectionsPage>
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Icon(
-                                      Icons.dashboard_customize_outlined,
-                                      size: 70,
-                                      color: Colors.white10),
+                                    Icons.dashboard_customize_outlined,
+                                    size: 70,
+                                    color: Colors.white10,
+                                  ),
                                   const SizedBox(height: 20),
-                                  Text('No Collections Yet',
-                                      style: _textStyle.copyWith(
-                                          fontSize: 18,
-                                          color: Colors.white38)),
+                                  Text(
+                                    'No Collections Yet',
+                                    style: _textStyle.copyWith(
+                                      fontSize: 18,
+                                      color: Colors.white38,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                           )
                         : SliverPadding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 10),
+                              horizontal: 20,
+                              vertical: 10,
+                            ),
                             sliver: SliverGrid(
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                childAspectRatio: 1.4,
-                                crossAxisSpacing: 15,
-                                mainAxisSpacing: 15,
-                              ),
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  final collection = collections[index];
-                                  final isFavorite = userProfile
-                                          ?.favoriteCollectionIds
-                                          .contains(collection.id) ??
-                                      false;
-                                  return _buildDarkCard(collection, isFavorite);
-                                },
-                                childCount: collections.length,
-                              ),
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 1.4,
+                                    crossAxisSpacing: 15,
+                                    mainAxisSpacing: 15,
+                                  ),
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final collection = collections[index];
+                                final isFavorite =
+                                    userProfile?.favoriteCollectionIds.contains(
+                                      collection.id,
+                                    ) ??
+                                    false;
+                                return _buildDarkCard(collection, isFavorite);
+                              }, childCount: collections.length),
                             ),
                           ),
 
@@ -444,8 +524,9 @@ class _CollectionsPageState extends State<CollectionsPage>
     final bool isShared = collection.isShared;
     final bool isOwner =
         collection.ownerId == FirebaseAuth.instance.currentUser?.uid;
-    final String label =
-        isOwner ? (isShared ? 'Shared' : 'Private') : 'Subscribed';
+    final String label = isOwner
+        ? (isShared ? 'Shared' : 'Private')
+        : 'Subscribed';
     final IconData labelIcon = isOwner
         ? (isShared ? Icons.public : Icons.lock_outline)
         : Icons.group_add_outlined;
@@ -456,23 +537,27 @@ class _CollectionsPageState extends State<CollectionsPage>
     return GestureDetector(
       onTap: () {
         if (mounted) {
-          Navigator.of(context).push(_createFluidRoute(FlashcardPage(
-            collectionId: collection.id!,
-            collectionName: collection.name,
-                      )));
+          Navigator.of(context).push(
+            _createFluidRoute(
+              FlashcardPage(
+                collectionId: collection.id!,
+                collectionName: collection.name,
+              ),
+            ),
+          );
         }
       },
       onLongPress: () => _showOptionsSheet(collection),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
-          border:
-              Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 15,
-                offset: const Offset(0, 8))
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
           ],
         ),
         child: ClipRRect(
@@ -496,8 +581,11 @@ class _CollectionsPageState extends State<CollectionsPage>
                   Positioned(
                     right: -15,
                     bottom: -15,
-                    child: Icon(labelIcon,
-                        size: 100, color: iconColor.withOpacity(0.05)),
+                    child: Icon(
+                      labelIcon,
+                      size: 100,
+                      color: iconColor.withOpacity(0.05),
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.all(20.0),
@@ -509,7 +597,9 @@ class _CollectionsPageState extends State<CollectionsPage>
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 color: iconColor.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(20),
@@ -519,18 +609,23 @@ class _CollectionsPageState extends State<CollectionsPage>
                                 children: [
                                   Icon(labelIcon, color: iconColor, size: 14),
                                   const SizedBox(width: 5),
-                                  Text(label,
-                                      style: TextStyle(
-                                          color: iconColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold)),
+                                  Text(
+                                    label,
+                                    style: TextStyle(
+                                      color: iconColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                             InkWell(
                               onTap: () async {
                                 await _dbService.toggleFavorite(
-                                    collection.id!, isFavorite);
+                                  collection.id!,
+                                  isFavorite,
+                                );
                               },
                               child: Icon(
                                 isFavorite
@@ -545,17 +640,21 @@ class _CollectionsPageState extends State<CollectionsPage>
                           ],
                         ),
                         const Spacer(),
-                        Text(collection.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: _textStyle.copyWith(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                height: 1.2)),
+                        Text(
+                          collection.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: _textStyle.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            height: 1.2,
+                          ),
+                        ),
                         const SizedBox(height: 5),
-                        const Text('Tap to study',
-                            style: TextStyle(
-                                color: Colors.white38, fontSize: 11)),
+                        const Text(
+                          'Tap to study',
+                          style: TextStyle(color: Colors.white38, fontSize: 11),
+                        ),
                       ],
                     ),
                   ),
@@ -573,7 +672,8 @@ class _CollectionsPageState extends State<CollectionsPage>
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
       builder: (sheetContext) => Wrap(
         children: [
           ListTile(
@@ -594,8 +694,9 @@ class _CollectionsPageState extends State<CollectionsPage>
                     : Colors.greenAccent,
               ),
               title: Text(
-                  collection.isShared ? 'Make Private' : 'Make Public',
-                  style: _textStyle),
+                collection.isShared ? 'Make Private' : 'Make Public',
+                style: _textStyle,
+              ),
               onTap: () async {
                 Navigator.pop(sheetContext);
                 final newStatus = !collection.isShared;
@@ -613,40 +714,49 @@ class _CollectionsPageState extends State<CollectionsPage>
                     ),
                     actions: [
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: Text('Cancel',
-                              style:
-                                  TextStyle(color: Colors.grey.shade400))),
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(color: Colors.grey.shade400),
+                        ),
+                      ),
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: Text(actionText,
-                              style: TextStyle(
-                                  color: newStatus
-                                      ? Colors.greenAccent
-                                      : Colors.orangeAccent))),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text(
+                          actionText,
+                          style: TextStyle(
+                            color: newStatus
+                                ? Colors.greenAccent
+                                : Colors.orangeAccent,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 );
                 if (confirm == true) {
                   await _dbService.updateCollectionVisibility(
-                      collection.id!, newStatus);
+                    collection.id!,
+                    newStatus,
+                  );
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                        newStatus
-                            ? 'Collection is now Public!'
-                            : 'Collection is now Private',
-                        style: const TextStyle(color: Colors.black),
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          newStatus
+                              ? 'Collection is now Public!'
+                              : 'Collection is now Private',
+                          style: const TextStyle(color: Colors.black),
+                        ),
+                        backgroundColor: _accentColor,
                       ),
-                      backgroundColor: _accentColor,
-                    ));
+                    );
                   }
                 }
               },
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.group_add, color: Colors.orangeAccent),
+              leading: const Icon(Icons.group_add, color: Colors.orangeAccent),
               title: Text('Manage Editors', style: _textStyle),
               onTap: () {
                 Navigator.pop(sheetContext);
@@ -662,13 +772,18 @@ class _CollectionsPageState extends State<CollectionsPage>
               onTap: () async {
                 Navigator.pop(sheetContext);
                 await Clipboard.setData(
-                    ClipboardData(text: collection.shareCode!));
+                  ClipboardData(text: collection.shareCode!),
+                );
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: const Text('Share Code copied!',
-                        style: TextStyle(color: Colors.black)),
-                    backgroundColor: _accentColor,
-                  ));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text(
+                        'Share Code copied!',
+                        style: TextStyle(color: Colors.black),
+                      ),
+                      backgroundColor: _accentColor,
+                    ),
+                  );
                 }
               },
             ),
@@ -687,14 +802,19 @@ class _CollectionsPageState extends State<CollectionsPage>
                     title: Text('Are you sure?', style: _textStyle),
                     actions: [
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: Text('Cancel',
-                              style:
-                                  TextStyle(color: Colors.grey.shade400))),
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(color: Colors.grey.shade400),
+                        ),
+                      ),
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Delete',
-                              style: TextStyle(color: Colors.redAccent))),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -706,8 +826,10 @@ class _CollectionsPageState extends State<CollectionsPage>
 
           if (collection.ownerId != FirebaseAuth.instance.currentUser?.uid)
             ListTile(
-              leading: const Icon(Icons.remove_circle_outline,
-                  color: Colors.redAccent),
+              leading: const Icon(
+                Icons.remove_circle_outline,
+                color: Colors.redAccent,
+              ),
               title: Text('Unsubscribe', style: _textStyle),
               onTap: () async {
                 Navigator.pop(sheetContext);
@@ -717,18 +839,24 @@ class _CollectionsPageState extends State<CollectionsPage>
                     backgroundColor: _cardColor,
                     title: Text('Unsubscribe', style: _textStyle),
                     content: Text(
-                        "Are you sure you want to unsubscribe from '${collection.name}'?",
-                        style: const TextStyle(color: Colors.white70)),
+                      "Are you sure you want to unsubscribe from '${collection.name}'?",
+                      style: const TextStyle(color: Colors.white70),
+                    ),
                     actions: [
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: Text('Cancel',
-                              style:
-                                  TextStyle(color: Colors.grey.shade400))),
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(color: Colors.grey.shade400),
+                        ),
+                      ),
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Unsubscribe',
-                              style: TextStyle(color: Colors.redAccent))),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text(
+                          'Unsubscribe',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
                     ],
                   ),
                 );

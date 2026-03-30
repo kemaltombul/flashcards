@@ -215,8 +215,11 @@ class _FlashcardPageState extends State<FlashcardPage> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close,
-                            color: Colors.white60, size: 20),
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.white60,
+                          size: 20,
+                        ),
                         onPressed: () => Navigator.pop(context),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -265,12 +268,14 @@ class _FlashcardPageState extends State<FlashcardPage> {
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text("Struggling",
-                          style:
-                              TextStyle(color: Colors.white38, fontSize: 10)),
-                      Text("Mastered",
-                          style:
-                              TextStyle(color: Colors.white38, fontSize: 10)),
+                      Text(
+                        "Struggling",
+                        style: TextStyle(color: Colors.white38, fontSize: 10),
+                      ),
+                      Text(
+                        "Mastered",
+                        style: TextStyle(color: Colors.white38, fontSize: 10),
+                      ),
                     ],
                   ),
                 ],
@@ -294,9 +299,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
 
     setState(() {
       _showMeaning = false;
-      _currentIndex = _currentIndex < _words.length - 1
-          ? _currentIndex + 1
-          : 0;
+      _currentIndex = _currentIndex < _words.length - 1 ? _currentIndex + 1 : 0;
       _pickRandomBackground();
       _startTimer();
     });
@@ -542,6 +545,7 @@ class _FlashcardPageState extends State<FlashcardPage> {
           filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: Container(
             width: 320,
+            height: 480,
             padding: const EdgeInsets.all(30),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.15),
@@ -559,37 +563,66 @@ class _FlashcardPageState extends State<FlashcardPage> {
               ],
             ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  "WORD",
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                    letterSpacing: 2,
+                if (word.partOfSpeech != PartOfSpeech.unknown) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.amber, // Daha dikkat çekici, parlak sarı
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      word.partOfSpeech.label.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                   ),
-                ),
+                ] else
+                  const SizedBox(height: 32),
                 const SizedBox(height: 5),
                 Text(
                   word.word,
                   textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 36,
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                
                 const SizedBox(height: 15),
                 const Divider(color: Colors.white30, thickness: 1),
                 const SizedBox(height: 15),
                 const Text(
                   "DEFINITION",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 12, color: Colors.white60),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   word.definition,
                   textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.white.withValues(alpha: 0.9),
@@ -597,48 +630,52 @@ class _FlashcardPageState extends State<FlashcardPage> {
                 ),
                 const SizedBox(height: 20),
 
-                AnimatedOpacity(
-                  duration: _showMeaning
-                      ? const Duration(milliseconds: 500)
-                      : Duration.zero,
-                  opacity: _showMeaning ? 1.0 : 0.0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.deepPurpleAccent.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.5),
+                SizedBox(
+                  height: 52,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 400),
+                        opacity: _showMeaning ? 1.0 : 0.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.deepPurpleAccent.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: Text(
+                            word.translation,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      word.translation,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 300),
+                        opacity: _showMeaning ? 0.0 : 1.0,
+                        child: const Text(
+                          "Tap to reveal / Waiting...",
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
-                  opacity: _showMeaning ? 0.0 : 1.0,
-                  child: const Padding(
-                    padding: EdgeInsets.only(top: 6.0),
-                    child: Text(
-                      "Tap to reveal / Waiting...",
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: 11,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
+                    ],
                   ),
                 ),
 
@@ -650,10 +687,12 @@ class _FlashcardPageState extends State<FlashcardPage> {
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: Text(
-                    "\u201c${word.contextualInfo}\u201d",
+                    "“${word.contextualInfo}”",
                     textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       color: Colors.white.withValues(alpha: 0.85),
                       fontStyle: FontStyle.italic,
                     ),

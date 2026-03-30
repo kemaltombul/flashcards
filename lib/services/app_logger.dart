@@ -26,9 +26,9 @@ class AppLogEntry {
   final String id;
   final LogLevel level;
   final LogCategory category;
-  final String operation;   // e.g. "insertWord", "subscribeByShareCode"
+  final String operation; // e.g. "insertWord", "subscribeByShareCode"
   final String message;
-  final String? detail;     // stack trace veya ek bağlam
+  final String? detail; // stack trace veya ek bağlam
   final String? userId;
   final Map<String, dynamic>? meta; // isteğe bağlı ekstra veri
   final DateTime timestamp;
@@ -46,18 +46,19 @@ class AppLogEntry {
   });
 
   Map<String, dynamic> toMap() => {
-        'level': level.name,
-        'category': category.name,
-        'operation': operation,
-        'message': message,
-        if (detail != null) 'detail': detail,
-        if (userId != null) 'user_id': userId,
-        if (meta != null) 'meta': meta,
-        'timestamp': timestamp.millisecondsSinceEpoch,
-        'timestamp_iso': timestamp.toIso8601String(),
-      };
+    'level': level.name,
+    'category': category.name,
+    'operation': operation,
+    'message': message,
+    if (detail != null) 'detail': detail,
+    if (userId != null) 'user_id': userId,
+    if (meta != null) 'meta': meta,
+    'timestamp': timestamp.millisecondsSinceEpoch,
+    'timestamp_iso': timestamp.toIso8601String(),
+  };
 
-  static AppLogEntry fromMap(Map<String, dynamic> map, String id) => AppLogEntry(
+  static AppLogEntry fromMap(Map<String, dynamic> map, String id) =>
+      AppLogEntry(
         id: id,
         level: LogLevel.values.firstWhere(
           (l) => l.name == map['level'],
@@ -71,7 +72,9 @@ class AppLogEntry {
         message: map['message'] ?? '',
         detail: map['detail'],
         userId: map['user_id'],
-        meta: map['meta'] != null ? Map<String, dynamic>.from(map['meta']) : null,
+        meta: map['meta'] != null
+            ? Map<String, dynamic>.from(map['meta'])
+            : null,
         timestamp: map['timestamp'] != null
             ? DateTime.fromMillisecondsSinceEpoch(map['timestamp'])
             : DateTime.now(),
@@ -115,13 +118,13 @@ class AppLogger {
     StackTrace? stackTrace,
     Map<String, dynamic>? meta,
   }) => _write(
-        LogLevel.error,
-        category,
-        operation,
-        _extractMessage(e),
-        detail: stackTrace != null ? stackTrace.toString() : e.toString(),
-        meta: meta,
-      );
+    LogLevel.error,
+    category,
+    operation,
+    _extractMessage(e),
+    detail: stackTrace != null ? stackTrace.toString() : e.toString(),
+    meta: meta,
+  );
 
   void critical(
     String operation,
@@ -130,13 +133,13 @@ class AppLogger {
     StackTrace? stackTrace,
     Map<String, dynamic>? meta,
   }) => _write(
-        LogLevel.critical,
-        category,
-        operation,
-        _extractMessage(e),
-        detail: stackTrace != null ? stackTrace.toString() : e.toString(),
-        meta: meta,
-      );
+    LogLevel.critical,
+    category,
+    operation,
+    _extractMessage(e),
+    detail: stackTrace != null ? stackTrace.toString() : e.toString(),
+    meta: meta,
+  );
 
   // ── Query methods (arayüz için) ─────────────
 
@@ -190,10 +193,14 @@ class AppLogger {
         .toList();
 
     // Client-side filtreler
-    if (level != null)    entries = entries.where((e) => e.level == level).toList();
-    if (category != null) entries = entries.where((e) => e.category == category).toList();
-    if (from != null)     entries = entries.where((e) => e.timestamp.isAfter(from)).toList();
-    if (to != null)       entries = entries.where((e) => e.timestamp.isBefore(to)).toList();
+    if (level != null)
+      entries = entries.where((e) => e.level == level).toList();
+    if (category != null)
+      entries = entries.where((e) => e.category == category).toList();
+    if (from != null)
+      entries = entries.where((e) => e.timestamp.isAfter(from)).toList();
+    if (to != null)
+      entries = entries.where((e) => e.timestamp.isBefore(to)).toList();
 
     return entries;
   }

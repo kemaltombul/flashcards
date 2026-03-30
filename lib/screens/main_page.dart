@@ -22,12 +22,14 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-    _bgImage = widget.initialBgImage ??
+    _bgImage =
+        widget.initialBgImage ??
         'assets/images/bg${(DateTime.now().millisecond % 12) + 1}.jpg';
   }
 
   void _onItemTapped(int index) {
-    FocusManager.instance.primaryFocus?.unfocus(); // ✅ Alt bar ile geçişte de kapanır
+    FocusManager.instance.primaryFocus
+        ?.unfocus(); // ✅ Alt bar ile geçişte de kapanır
     setState(() {
       _currentIndex = index;
     });
@@ -39,7 +41,8 @@ class _MainPageState extends State<MainPage> {
   }
 
   void _onPageChanged(int index) {
-    FocusManager.instance.primaryFocus?.unfocus(); // ✅ Kaydırarak geçişte kapanır
+    FocusManager.instance.primaryFocus
+        ?.unfocus(); // ✅ Kaydırarak geçişte kapanır
     setState(() {
       _currentIndex = index;
     });
@@ -102,10 +105,7 @@ class _MainPageState extends State<MainPage> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(
-            top: BorderSide(
-              color: Colors.white.withOpacity(0.1),
-              width: 0.5,
-            ),
+            top: BorderSide(color: Colors.white.withOpacity(0.1), width: 0.5),
           ),
           color: Colors.transparent,
         ),

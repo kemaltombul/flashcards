@@ -26,16 +26,22 @@ class _ManageEditorsDialogState extends State<ManageEditorsDialog> {
     if (username.isEmpty) return;
 
     setState(() => _isLoading = true);
-    
-    final result = await _dbService.addEditorByUsername(widget.collection.id!, username);
-    
+
+    final result = await _dbService.addEditorByUsername(
+      widget.collection.id!,
+      username,
+    );
+
     setState(() => _isLoading = false);
-    
+
     if (mounted) {
       if (result == "Success") {
         _usernameController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Added $username as editor!"), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text("Added $username as editor!"),
+            backgroundColor: Colors.green,
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -54,12 +60,18 @@ class _ManageEditorsDialogState extends State<ManageEditorsDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text("Cancel", style: TextStyle(color: Colors.grey.shade400)),
+            child: Text(
+              "Cancel",
+              style: TextStyle(color: Colors.grey.shade400),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Remove", style: TextStyle(color: Colors.redAccent)),
-          )
+            child: const Text(
+              "Remove",
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
         ],
       ),
     );
@@ -83,7 +95,14 @@ class _ManageEditorsDialogState extends State<ManageEditorsDialog> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("Manage Editors", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text(
+                  "Manage Editors",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),
                   onPressed: () => Navigator.pop(context),
@@ -92,7 +111,7 @@ class _ManageEditorsDialogState extends State<ManageEditorsDialog> {
             ),
           ),
           const Divider(color: Colors.white12, height: 1),
-          
+
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
@@ -106,8 +125,14 @@ class _ManageEditorsDialogState extends State<ManageEditorsDialog> {
                       hintStyle: const TextStyle(color: Colors.white38),
                       filled: true,
                       fillColor: Colors.black12,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -116,56 +141,88 @@ class _ManageEditorsDialogState extends State<ManageEditorsDialog> {
                   onPressed: _isLoading ? null : _addEditor,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _accentColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     padding: const EdgeInsets.all(14),
                   ),
-                  child: _isLoading 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)) 
-                    : const Icon(Icons.person_add, color: Colors.black),
-                )
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : const Icon(Icons.person_add, color: Colors.black),
+                ),
               ],
             ),
           ),
-          
+
           Flexible(
             child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance.collection('collections').doc(widget.collection.id!).snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('collections')
+                  .doc(widget.collection.id!)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData || !snapshot.data!.exists) {
-                  return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
+                  return const SizedBox(
+                    height: 50,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
                 }
-                
+
                 final data = snapshot.data!.data() as Map<String, dynamic>?;
-                final List<String> editorUids = List<String>.from(data?['editor_uids'] ?? []);
-                
+                final List<String> editorUids = List<String>.from(
+                  data?['editor_uids'] ?? [],
+                );
+
                 if (editorUids.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(20.0),
-                    child: Text("No editors added yet.", style: TextStyle(color: Colors.white54)),
+                    child: Text(
+                      "No editors added yet.",
+                      style: TextStyle(color: Colors.white54),
+                    ),
                   );
                 }
-                
+
                 return ListView.builder(
                   shrinkWrap: true,
                   itemCount: editorUids.length,
                   itemBuilder: (context, index) {
                     final uid = editorUids[index];
                     return FutureBuilder<DocumentSnapshot>(
-                       future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
-                       builder: (context, userSnap) {
-                         if (!userSnap.hasData) return const ListTile(title: Text("Loading..."));
-                         final userData = userSnap.data?.data() as Map<String, dynamic>?;
-                         final username = userData?['username'] ?? "Unknown User";
-                         
-                         return ListTile(
-                           leading: const CircleAvatar(backgroundColor: Colors.white12, child: Icon(Icons.person, color: Colors.white70)),
-                           title: Text(username, style: _textStyle),
-                           trailing: IconButton(
-                             icon: const Icon(Icons.remove_circle, color: Colors.redAccent),
-                             onPressed: () => _removeEditor(uid),
-                           ),
-                         );
-                       },
+                      future: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(uid)
+                          .get(),
+                      builder: (context, userSnap) {
+                        if (!userSnap.hasData)
+                          return const ListTile(title: Text("Loading..."));
+                        final userData =
+                            userSnap.data?.data() as Map<String, dynamic>?;
+                        final username =
+                            userData?['username'] ?? "Unknown User";
+
+                        return ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: Colors.white12,
+                            child: Icon(Icons.person, color: Colors.white70),
+                          ),
+                          title: Text(username, style: _textStyle),
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.remove_circle,
+                              color: Colors.redAccent,
+                            ),
+                            onPressed: () => _removeEditor(uid),
+                          ),
+                        );
+                      },
                     );
                   },
                 );

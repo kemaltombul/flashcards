@@ -1,28 +1,28 @@
 /// KİŞİSEL CEVAP KAĞIDI (WordTelemetry)
-/// 
+///
 /// Kelimenin kendisi (Word modeli) herkesin görebileceği ortak bir "Soru Bankası" kitabıdır.
-/// Bu model ise sadece o kullanıcıya ait olan, soru bankasındaki kelimelerin yanına 
-/// aldığı notlardır (Optik Form). 
-/// 
+/// Bu model ise sadece o kullanıcıya ait olan, soru bankasındaki kelimelerin yanına
+/// aldığı notlardır (Optik Form).
+///
 /// Firestore'daki yeri: `users/{uid}/word_stats/{wordId}`
 /// Kelime ortak olsa bile, istatistikler ve öğrenme durumu tamamen KİŞİSELDİR (Private).
 class WordTelemetry {
   /// Hangi kelimenin istatistiği tutuluyor? (Word document ID)
-  final String wordId; 
-  
-  /// Bu kelime hangi koleksiyonun altındaydı? (İleride "Ahmet YDS koleksiyonunda ne kadar ilerlemiş?" 
+  final String wordId;
+
+  /// Bu kelime hangi koleksiyonun altındaydı? (İleride "Ahmet YDS koleksiyonunda ne kadar ilerlemiş?"
   /// diye bir yüzde veya "Progress Bar" hesaplamak istersek sorguları hızlandırır.)
-  final String collectionId; 
+  final String collectionId;
 
   // -- KİŞİSEL ÖĞRENME VERİLERİ --
-  
+
   /// Kullanıcı bu kelimeyi "Study (Flashcard)" veya "Game" modunda kaç kere gördü?
-  final int viewCount; 
-  
-  /// Kullanıcı bu kelimeyi EN SON ne zaman çalıştı? 
+  final int viewCount;
+
+  /// Kullanıcı bu kelimeyi EN SON ne zaman çalıştı?
   /// (Gelecekte Aralıklı Tekrar - Spaced Repetition / SRS algoritması yazmak istersek hayat kurtarır.)
-  final DateTime? lastReviewedAt; 
-  
+  final DateTime? lastReviewedAt;
+
   /// Kullanıcının bu kelimeye verdiği "Zorluk/Kolaylık" puanları (Örn: 1 Çok Zor, 5 Çok Kolay)
   /// Sadece son durumu değil, kullanıcının gelişimini (Array / Liste olarak) izlemek için.
   final List<int> myRatings;

@@ -114,8 +114,8 @@ class _MultiSelectDropdownState extends State<MultiSelectDropdown> {
 
   void _closeDropdown() {
     // EKLENDİ: Zaten kapalıysa tekrar denememesi için ufak bir koruma
-    if (!_isDropdownOpen || _overlayEntry == null) return; 
-    
+    if (!_isDropdownOpen || _overlayEntry == null) return;
+
     _overlayEntry?.remove();
     _overlayEntry = null; // Bellek sızıntısını ve null check hatalarını önler
     setState(() => _isDropdownOpen = false);

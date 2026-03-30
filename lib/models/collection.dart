@@ -1,33 +1,33 @@
 /// BİLGİ PANOSU / KLASÖR (Collection)
-/// 
+///
 /// Kelimeleri (Word) içinde barındıran salt (pure) bir veri kabıdır.
 /// Bu model artık "Ben favori miyim?", "Ben oyun modunda mıyım?" gibi KİŞİSEL
 /// tercihleri içinde tutmaz. Sadece ne olduğunu ve kime ait olduğunu bilir.
-/// 
+///
 /// Firestore'daki yeri: `collections/{id}` (Artık users/uid/collections değil, herkesin görebilmesi için kök dizine de taşınabilir veya mevcut yapıda kalıp isShared ile yönetilebilir).
 class Collection {
   /// Veritabanındaki belge (Document) ID'si
-  final String? id; 
-  
+  final String? id;
+
   /// Koleksiyonun adı (Örn: "YDS Kelimeleri", "Günlük İngilizce")
   final String name;
-  
+
   /// Bu koleksiyonu SIFIRDAN YARATAN kişinin (Owner) Firestore User ID'si.
   /// (Eğer başkası bunu klonlarsa, klonlanan yeni kopyanın ownerId'si o kişi olur.)
-  final String ownerId; 
-  
+  final String ownerId;
+
   /// PAYLAŞIM DURUMU
-  /// Eğer `true` ise, bu koleksiyon artık uygulamanın "Keşfet (Community)" sekmesinde 
+  /// Eğer `true` ise, bu koleksiyon artık uygulamanın "Keşfet (Community)" sekmesinde
   /// listelenebilir veya linki olan herkes tarafından "Abone Olunabilir" hale gelmiştir.
-  final bool isShared; 
-  
-  /// URL tabanlı paylaşım (Deep-Link) veya WhatsApp'tan arkadaşa atılacak 
+  final bool isShared;
+
+  /// URL tabanlı paylaşım (Deep-Link) veya WhatsApp'tan arkadaşa atılacak
   /// 6 haneli kısa kod (Opsiyonel).
-  final String? shareCode; 
-  
+  final String? shareCode;
+
   /// Editörlerin (Ortakların) kullanıcı ID'lerini (UID) tutar.
-  final List<String> editorUids;  
-  
+  final List<String> editorUids;
+
   /// AI ÜRETİM MODU (Bağlam Tipi)
   /// Kelime üretilirken AI'ın neye odaklanacağını belirler:
   /// 'Academy', 'Cinema', 'Mnemonic', 'Practical'
@@ -69,8 +69,8 @@ class Collection {
       shareCode: map['share_code'],
       editorUids: List<String>.from(map['editor_uids'] ?? []),
       contextType: map['context_type'] ?? 'Academy',
-      createdAt: map['created_at'] != null 
-          ? DateTime.fromMillisecondsSinceEpoch(map['created_at']) 
+      createdAt: map['created_at'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['created_at'])
           : null,
     );
   }

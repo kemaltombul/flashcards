@@ -88,7 +88,8 @@ class _AppPreparationGateState extends State<AppPreparationGate> {
   @override
   void initState() {
     super.initState();
-    _initialBgImage = 'assets/images/bg${(DateTime.now().millisecond % 10) + 1}.jpg';
+    _initialBgImage =
+        'assets/images/bg${(DateTime.now().millisecond % 10) + 1}.jpg';
     _prepareApp();
   }
 
@@ -116,7 +117,7 @@ class _AppPreparationGateState extends State<AppPreparationGate> {
         body: SizedBox.shrink(),
       );
     }
-    
+
     // Smoothly present the fully rendered MainPage
     return MainPage(initialBgImage: _initialBgImage);
   }

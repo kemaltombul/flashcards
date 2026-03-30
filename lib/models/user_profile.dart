@@ -94,8 +94,9 @@ class UserProfile {
       'uid': uid,
       'username': username,
       'favorite_collection_ids': favoriteCollectionIds,
-      'subscribed_collections':
-          subscribedCollections.map((s) => s.toMap()).toList(),
+      'subscribed_collections': subscribedCollections
+          .map((s) => s.toMap())
+          .toList(),
       'total_study_time_ms': totalStudyTimeMs,
       'total_cards_reviewed': totalCardsReviewed,
       'streak': streak,
@@ -108,14 +109,16 @@ class UserProfile {
     return UserProfile(
       uid: map['uid'] ?? '',
       username: map['username'],
-      favoriteCollectionIds:
-          List<String>.from(map['favorite_collection_ids'] ?? []),
+      favoriteCollectionIds: List<String>.from(
+        map['favorite_collection_ids'] ?? [],
+      ),
       subscribedCollections:
           (map['subscribed_collections'] as List<dynamic>?)
-                  ?.map((e) =>
-                      SubscribedCollection.fromMap(e as Map<String, dynamic>))
-                  .toList() ??
-              [],
+              ?.map(
+                (e) => SubscribedCollection.fromMap(e as Map<String, dynamic>),
+              )
+              .toList() ??
+          [],
       totalStudyTimeMs: map['total_study_time_ms'] ?? 0,
       totalCardsReviewed: map['total_cards_reviewed'] ?? 0,
       streak: map['streak'] ?? 0,
@@ -162,16 +165,10 @@ class SubscribedCollection {
   /// - `editor`: Koleksiyon sahibi yetki verdiyse kelime ekleyebilir.
   final String role;
 
-  SubscribedCollection({
-    required this.collectionId,
-    this.role = 'reader',
-  });
+  SubscribedCollection({required this.collectionId, this.role = 'reader'});
 
   Map<String, dynamic> toMap() {
-    return {
-      'collection_id': collectionId,
-      'role': role,
-    };
+    return {'collection_id': collectionId, 'role': role};
   }
 
   factory SubscribedCollection.fromMap(Map<String, dynamic> map) {

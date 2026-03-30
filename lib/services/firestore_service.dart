@@ -4,7 +4,6 @@ import 'package:rxdart/rxdart.dart';
 import '../models/collection.dart';
 import '../models/word.dart';
 import '../models/user_profile.dart';
-import '../models/word_telemetry.dart';
 import 'app_logger.dart';
 import 'dart:math';
 
@@ -48,11 +47,21 @@ class FirestoreService {
     };
 
     if (isPermissionDenied) {
-      _log.critical(operation, e,
-          category: category, stackTrace: st, meta: enrichedMeta);
+      _log.critical(
+        operation,
+        e,
+        category: category,
+        stackTrace: st,
+        meta: enrichedMeta,
+      );
     } else {
-      _log.error(operation, e,
-          category: category, stackTrace: st, meta: enrichedMeta);
+      _log.error(
+        operation,
+        e,
+        category: category,
+        stackTrace: st,
+        meta: enrichedMeta,
+      );
     }
   }
 
@@ -64,8 +73,11 @@ class FirestoreService {
     const op = 'createUserProfile';
     final uid = _userId;
     if (uid == null) {
-      _log.warning(op, 'Çağrıldı ama oturum açık değil.',
-          category: LogCategory.auth);
+      _log.warning(
+        op,
+        'Çağrıldı ama oturum açık değil.',
+        category: LogCategory.auth,
+      );
       return;
     }
 
@@ -84,15 +96,21 @@ class FirestoreService {
   }
 
   Stream<UserProfile?> getUserProfileStream() {
+    //çikiş yapmış mı kontrolü??
     final uid = _userId;
     if (uid == null) return Stream.value(null);
 
-    return _db.collection('users').doc(uid).snapshots().map((snapshot) {
-      if (!snapshot.exists || snapshot.data() == null) return null;
-      return UserProfile.fromMap(snapshot.data()!);
-    }).handleError((e, st) {
-      _logStreamError('getUserProfileStream', e, st as StackTrace?);
-    });
+    return _db
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((snapshot) {
+          if (!snapshot.exists || snapshot.data() == null) return null;
+          return UserProfile.fromMap(snapshot.data()!);
+        })
+        .handleError((e, st) {
+          _logStreamError('getUserProfileStream', e, st as StackTrace?);
+        });
   }
 
   Future<UserProfile?> getUserProfile() async {
@@ -113,8 +131,11 @@ class FirestoreService {
   // Global Collections
   // =======================================================================
 
-  Future<String> createCollection(String name, bool isShared,
-      {String contextType = 'Academy'}) async {
+  Future<String> createCollection(
+    String name,
+    bool isShared, {
+    String contextType = 'Academy',
+  }) async {
     const op = 'createCollection';
     final uid = _userId;
     if (uid == null) {
@@ -128,8 +149,12 @@ class FirestoreService {
       final docRef = _db.collection('collections').doc();
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       final random = Random();
-      final shareCode = String.fromCharCodes(Iterable.generate(
-          6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
+      final shareCode = String.fromCharCodes(
+        Iterable.generate(
+          6,
+          (_) => chars.codeUnitAt(random.nextInt(chars.length)),
+        ),
+      );
 
       final collection = Collection(
         id: docRef.id,
@@ -157,12 +182,14 @@ class FirestoreService {
         .where('owner_id', isEqualTo: uid)
         .orderBy('created_at', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Collection.fromMap(doc.data(), doc.id))
-            .toList())
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => Collection.fromMap(doc.data(), doc.id))
+              .toList(),
+        )
         .handleError((e, st) {
-      _logStreamError('getMyOwnedCollectionsStream', e, st as StackTrace?);
-    });
+          _logStreamError('getMyOwnedCollectionsStream', e, st as StackTrace?);
+        });
   }
 
   Stream<List<Collection>> getEditableCollectionsStream() {
@@ -175,9 +202,11 @@ class FirestoreService {
           .collection('collections')
           .where('editor_uids', arrayContains: uid)
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map((doc) => Collection.fromMap(doc.data(), doc.id))
-              .toList()),
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => Collection.fromMap(doc.data(), doc.id))
+                .toList(),
+          ),
       (List<Collection> owned, List<Collection> editorSubs) {
         final combinedMap = <String, Collection>{};
         for (var c in owned) {
@@ -200,7 +229,9 @@ class FirestoreService {
   }
 
   Future<String> addEditorByUsername(
-      String collectionId, String targetUsername) async {
+    String collectionId,
+    String targetUsername,
+  ) async {
     const op = 'addEditorByUsername';
     final uid = _userId;
     if (uid == null) return 'Not logged in';
@@ -213,8 +244,11 @@ class FirestoreService {
           .get();
 
       if (userSnap.docs.isEmpty) {
-        _log.warning(op, '"$targetUsername" kullanıcısı bulunamadı.',
-            meta: {'collection_id': collectionId});
+        _log.warning(
+          op,
+          '"$targetUsername" kullanıcısı bulunamadı.',
+          meta: {'collection_id': collectionId},
+        );
         return "User with username '$targetUsername' not found";
       }
 
@@ -227,38 +261,49 @@ class FirestoreService {
 
       return 'Success';
     } catch (e, st) {
-      _log.error(op, e,
-          stackTrace: st,
-          meta: {
-            'collection_id': collectionId,
-            'target_username': targetUsername
-          });
+      _log.error(
+        op,
+        e,
+        stackTrace: st,
+        meta: {
+          'collection_id': collectionId,
+          'target_username': targetUsername,
+        },
+      );
       return 'Firebase Error: $e';
     }
   }
 
   Future<void> removeEditorFromCollection(
-      String collectionId, String targetUid) async {
+    String collectionId,
+    String targetUid,
+  ) async {
     const op = 'removeEditorFromCollection';
     try {
       await _db.collection('collections').doc(collectionId).update({
         'editor_uids': FieldValue.arrayRemove([targetUid]),
       });
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'collection_id': collectionId, 'target_uid': targetUid});
+      _fail(
+        op,
+        e,
+        st,
+        meta: {'collection_id': collectionId, 'target_uid': targetUid},
+      );
     }
   }
 
   Stream<List<Collection>> getSubscribedCollectionsStream(UserProfile profile) {
     if (profile.subscribedCollections.isEmpty) return Stream.value([]);
 
-    final subIds =
-        profile.subscribedCollections.map((s) => s.collectionId).toList();
+    final subIds = profile.subscribedCollections
+        .map((s) => s.collectionId)
+        .toList();
     final chunks = <List<String>>[];
     for (var i = 0; i < subIds.length; i += 10) {
-      chunks.add(subIds.sublist(
-          i, i + 10 > subIds.length ? subIds.length : i + 10));
+      chunks.add(
+        subIds.sublist(i, i + 10 > subIds.length ? subIds.length : i + 10),
+      );
     }
 
     final streamList = chunks.map((chunk) {
@@ -266,15 +311,22 @@ class FirestoreService {
           .collection('collections')
           .where(FieldPath.documentId, whereIn: chunk)
           .snapshots()
-          .map((snapshot) =>
-              snapshot.docs.map((doc) => Collection.fromMap(doc.data(), doc.id)));
+          .map(
+            (snapshot) => snapshot.docs.map(
+              (doc) => Collection.fromMap(doc.data(), doc.id),
+            ),
+          );
     }).toList();
 
     return Rx.combineLatestList(streamList)
         .map((listOfLists) => listOfLists.expand((list) => list).toList())
         .handleError((e, st) {
-      _logStreamError('getSubscribedCollectionsStream', e, st as StackTrace?);
-    });
+          _logStreamError(
+            'getSubscribedCollectionsStream',
+            e,
+            st as StackTrace?,
+          );
+        });
   }
 
   Future<bool> subscribeByShareCode(String shareCode) async {
@@ -291,8 +343,11 @@ class FirestoreService {
           .get();
 
       if (snapshot.docs.isEmpty) {
-        _log.warning(op, 'Geçersiz veya private share kodu.',
-            meta: {'share_code': shareCode});
+        _log.warning(
+          op,
+          'Geçersiz veya private share kodu.',
+          meta: {'share_code': shareCode},
+        );
         return false;
       }
 
@@ -301,8 +356,11 @@ class FirestoreService {
       final data = collectionDoc.data();
 
       if (data['owner_id'] == uid) {
-        _log.warning(op, 'Kullanıcı kendi koleksiyonuna abone olmaya çalıştı.',
-            meta: {'collection_id': collectionId});
+        _log.warning(
+          op,
+          'Kullanıcı kendi koleksiyonuna abone olmaya çalıştı.',
+          meta: {'collection_id': collectionId},
+        );
         return false;
       }
 
@@ -317,11 +375,12 @@ class FirestoreService {
         if (alreadySubscribed) return true;
       }
 
-      final newSub =
-          SubscribedCollection(collectionId: collectionId, role: 'reader');
+      final newSub = SubscribedCollection(
+        collectionId: collectionId,
+        role: 'reader',
+      );
       await _db.collection('users').doc(uid).update({
-        'subscribed_collections':
-            FieldValue.arrayUnion([newSub.toMap()]),
+        'subscribed_collections': FieldValue.arrayUnion([newSub.toMap()]),
       });
 
       return true;
@@ -343,10 +402,9 @@ class FirestoreService {
   Future<void> updateCollectionVisibility(String id, bool isShared) async {
     const op = 'updateCollectionVisibility';
     try {
-      await _db
-          .collection('collections')
-          .doc(id)
-          .update({'is_shared': isShared});
+      await _db.collection('collections').doc(id).update({
+        'is_shared': isShared,
+      });
     } catch (e, st) {
       _fail(op, e, st, meta: {'collection_id': id, 'is_shared': isShared});
     }
@@ -360,15 +418,21 @@ class FirestoreService {
     try {
       final userRef = _db.collection('users').doc(uid);
       if (isCurrentlyFavorite) {
-        await userRef
-            .update({'favorite_collection_ids': FieldValue.arrayRemove([id])});
+        await userRef.update({
+          'favorite_collection_ids': FieldValue.arrayRemove([id]),
+        });
       } else {
-        await userRef
-            .update({'favorite_collection_ids': FieldValue.arrayUnion([id])});
+        await userRef.update({
+          'favorite_collection_ids': FieldValue.arrayUnion([id]),
+        });
       }
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'collection_id': id, 'was_favorite': isCurrentlyFavorite});
+      _fail(
+        op,
+        e,
+        st,
+        meta: {'collection_id': id, 'was_favorite': isCurrentlyFavorite},
+      );
     }
   }
 
@@ -393,8 +457,7 @@ class FirestoreService {
           );
           if (itemToRemove != null) {
             await userRef.update({
-              'subscribed_collections':
-                  FieldValue.arrayRemove([itemToRemove]),
+              'subscribed_collections': FieldValue.arrayRemove([itemToRemove]),
             });
           }
         }
@@ -406,6 +469,10 @@ class FirestoreService {
 
   Future<void> deleteCollection(String id) async {
     const op = 'deleteCollection';
+    if (id.trim().isEmpty) {
+      _log.warning(op, 'ID bo\u015f. \u0130\u015flem iptal edildi.');
+      return;
+    }
     try {
       final wordsSnapshot = await _db
           .collection('words')
@@ -435,18 +502,51 @@ class FirestoreService {
 
   Future<String> insertWord(Word word) async {
     const op = 'insertWord';
+
+    // -- Temel alan do\u011frulamalar\u0131 --
+    if (word.collectionId.trim().isEmpty) {
+      throw ArgumentError('insertWord: collectionId bo\u015f olamaz.');
+    }
+    if (word.word.trim().isEmpty) {
+      throw ArgumentError('insertWord: word alan\u0131 bo\u015f olamaz.');
+    }
+
+    // -- Koleksiyon varl\u0131k kontrol\u00fc --
+    try {
+      final collectionDoc = await _db
+          .collection('collections')
+          .doc(word.collectionId)
+          .get();
+      if (!collectionDoc.exists) {
+        throw ArgumentError(
+          'insertWord: "${word.collectionId}" ID\u2019li koleksiyon mevcut de\u011fil.',
+        );
+      }
+    } catch (e, st) {
+      if (e is ArgumentError) rethrow;
+      _fail(op, e, st, meta: {'collection_id': word.collectionId});
+    }
+
     try {
       final docRef = _db.collection('words').doc();
       await docRef.set(word.toMap());
       return docRef.id;
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'word': word.word, 'collection_id': word.collectionId});
+      _fail(
+        op,
+        e,
+        st,
+        meta: {'word': word.word, 'collection_id': word.collectionId},
+      );
     }
   }
 
   Future<List<Word>> getWordsByCollection(String collectionId) async {
     const op = 'getWordsByCollection';
+    if (collectionId.trim().isEmpty) {
+      _log.warning(op, 'collectionId bo\u015f. Bo\u015f liste d\u00f6nd\u00fcr\u00fcl\u00fcyor.');
+      return [];
+    }
     try {
       final snapshot = await _db
           .collection('words')
@@ -463,6 +563,10 @@ class FirestoreService {
 
   Future<int> getWordCount(String collectionId) async {
     const op = 'getWordCount';
+    if (collectionId.trim().isEmpty) {
+      _log.warning(op, 'collectionId bo\u015f. 0 d\u00f6nd\u00fcr\u00fcl\u00fcyor.');
+      return 0;
+    }
     try {
       final snapshot = await _db
           .collection('words')
@@ -477,6 +581,10 @@ class FirestoreService {
 
   Future<void> deleteWord(String id) async {
     const op = 'deleteWord';
+    if (id.trim().isEmpty) {
+      _log.warning(op, 'ID bo\u015f. \u0130\u015flem iptal edildi.');
+      return;
+    }
     try {
       await _db.collection('words').doc(id).delete();
     } catch (e, st) {
@@ -486,7 +594,10 @@ class FirestoreService {
 
   Future<void> updateWord(Word word) async {
     const op = 'updateWord';
-    if (word.id == null) return;
+    if (word.id == null || word.id!.trim().isEmpty) {
+      _log.warning(op, 'word.id null veya bo\u015f. \u0130\u015flem iptal edildi.');
+      return;
+    }
     try {
       await _db.collection('words').doc(word.id).update(word.toMap());
     } catch (e, st) {
@@ -498,11 +609,18 @@ class FirestoreService {
   // Personal Telemetry
   // =======================================================================
 
-  Future<void> updateWordStats(String wordId, String collectionId,
-      {int durationMs = 0}) async {
+  Future<void> updateWordStats(
+    String wordId,
+    String collectionId, {
+    int durationMs = 0,
+  }) async {
     const op = 'updateWordStats';
     final uid = _userId;
     if (uid == null) return;
+    if (wordId.trim().isEmpty) {
+      _log.warning(op, 'wordId bo\u015f. \u0130\u015flem iptal edildi.');
+      return;
+    }
 
     try {
       final userRef = _db.collection('users').doc(uid);
@@ -525,16 +643,29 @@ class FirestoreService {
       }
       await userRef.update(profileUpdate);
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'word_id': wordId, 'collection_id': collectionId});
+      _fail(
+        op,
+        e,
+        st,
+        meta: {'word_id': wordId, 'collection_id': collectionId},
+      );
     }
   }
 
   Future<void> addRatingToWord(
-      String wordId, String collectionId, int rating) async {
+    String wordId,
+    String collectionId,
+    int rating,
+  ) async {
     const op = 'addRatingToWord';
     final uid = _userId;
     if (uid == null) return;
+    if (wordId.trim().isEmpty) {
+      _log.warning(op, 'wordId bo\u015f. \u0130\u015flem iptal edildi.');
+      return;
+    }
+    // Rating 1–6 aral\u0131\u011f\u0131na s\u0131n\u0131rla
+    final clampedRating = rating.clamp(1, 6);
 
     try {
       final statRef = _db
@@ -544,15 +675,19 @@ class FirestoreService {
           .doc(wordId);
       await statRef.set({
         'collection_id': collectionId,
-        'my_ratings': FieldValue.arrayUnion([rating]),
+        'my_ratings': FieldValue.arrayUnion([clampedRating]),
       }, SetOptions(merge: true));
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {
-            'word_id': wordId,
-            'collection_id': collectionId,
-            'rating': rating
-          });
+      _fail(
+        op,
+        e,
+        st,
+        meta: {
+          'word_id': wordId,
+          'collection_id': collectionId,
+          'rating': rating,
+        },
+      );
     }
   }
 
@@ -603,40 +738,50 @@ class FirestoreService {
   // Search & Existence Checks
   // =======================================================================
 
-  Future<bool> wordExists(String word) async {
+  Future<bool> wordExists(String word, {required String collectionId}) async {
     const op = 'wordExists';
     final uid = _userId;
     if (uid == null) return false;
+    if (word.trim().isEmpty || collectionId.trim().isEmpty) return false;
 
     try {
       final snapshot = await _db
           .collection('words')
           .where('word', isEqualTo: word)
+          .where('collection_id', isEqualTo: collectionId)
           .limit(1)
           .get();
       return snapshot.docs.isNotEmpty;
     } catch (e, st) {
-      _fail(op, e, st, meta: {'word': word});
+      _fail(op, e, st, meta: {'word': word, 'collection_id': collectionId});
     }
   }
 
-  Future<bool> wordAndMeaningExists(String word, String definition) async {
+  Future<bool> wordAndMeaningExists(
+    String word,
+    String definition, {
+    required String collectionId,
+  }) async {
     const op = 'wordAndMeaningExists';
+    if (word.trim().isEmpty || collectionId.trim().isEmpty) return false;
     try {
       final snapshot = await _db
           .collection('words')
           .where('word', isEqualTo: word)
           .where('definition', isEqualTo: definition)
+          .where('collection_id', isEqualTo: collectionId)
           .limit(1)
           .get();
       return snapshot.docs.isNotEmpty;
     } catch (e, st) {
-      _fail(op, e, st, meta: {'word': word});
+      _fail(op, e, st, meta: {'word': word, 'collection_id': collectionId});
     }
   }
 
-  Future<List<Word>> searchWords(String query,
-      {required List<String> collectionIds}) async {
+  Future<List<Word>> searchWords(
+    String query, {
+    required List<String> collectionIds,
+  }) async {
     const op = 'searchWords';
     if (collectionIds.isEmpty) return [];
 
@@ -646,13 +791,16 @@ class FirestoreService {
 
       for (int i = 0; i < collectionIds.length; i += chunkSize) {
         final chunk = collectionIds.sublist(
-            i, (i + chunkSize).clamp(0, collectionIds.length));
+          i,
+          (i + chunkSize).clamp(0, collectionIds.length),
+        );
         final snap = await _db
             .collection('words')
             .where('collection_id', whereIn: chunk)
             .get();
-        allWords
-            .addAll(snap.docs.map((doc) => Word.fromMap(doc.data(), doc.id)));
+        allWords.addAll(
+          snap.docs.map((doc) => Word.fromMap(doc.data(), doc.id)),
+        );
       }
 
       if (query.isEmpty) return allWords;
@@ -663,8 +811,12 @@ class FirestoreService {
             w.translation.toLowerCase().contains(lowerQ);
       }).toList();
     } catch (e, st) {
-      _fail(op, e, st,
-          meta: {'query': query, 'collection_count': collectionIds.length});
+      _fail(
+        op,
+        e,
+        st,
+        meta: {'query': query, 'collection_count': collectionIds.length},
+      );
     }
   }
 
@@ -693,13 +845,10 @@ class FirestoreService {
 
         // Kullanıcı dokümanı yoksa sıfırdan başlat
         if (!snapshot.exists || snapshot.data() == null) {
-          transaction.set(
-              userRef,
-              {
-                'streak': 1,
-                'last_study_date': today.millisecondsSinceEpoch,
-              },
-              SetOptions(merge: true));
+          transaction.set(userRef, {
+            'streak': 1,
+            'last_study_date': today.millisecondsSinceEpoch,
+          }, SetOptions(merge: true));
           return;
         }
 
@@ -718,8 +867,11 @@ class FirestoreService {
         }
 
         final lastDate = DateTime.fromMillisecondsSinceEpoch(lastTimestamp);
-        final normalizedLast =
-            DateTime(lastDate.year, lastDate.month, lastDate.day);
+        final normalizedLast = DateTime(
+          lastDate.year,
+          lastDate.month,
+          lastDate.day,
+        );
         final diff = today.difference(normalizedLast).inDays;
 
         if (diff == 0) {
@@ -751,12 +903,17 @@ class FirestoreService {
     final uid = _userId;
     if (uid == null) return Stream.value(0);
 
-    return _db.collection('users').doc(uid).snapshots().map((snapshot) {
-      if (!snapshot.exists || snapshot.data() == null) return 0;
-      final profile = UserProfile.fromMap(snapshot.data()!);
-      return profile.currentStreak;
-    }).handleError((e, st) {
-      _logStreamError('getUserStreakStream', e, st as StackTrace?);
-    });
+    return _db
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((snapshot) {
+          if (!snapshot.exists || snapshot.data() == null) return 0;
+          final profile = UserProfile.fromMap(snapshot.data()!);
+          return profile.currentStreak;
+        })
+        .handleError((e, st) {
+          _logStreamError('getUserStreakStream', e, st as StackTrace?);
+        });
   }
 }
