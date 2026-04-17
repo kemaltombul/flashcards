@@ -201,8 +201,9 @@ class _ManageEditorsDialogState extends State<ManageEditorsDialog> {
                           .doc(uid)
                           .get(),
                       builder: (context, userSnap) {
-                        if (!userSnap.hasData)
+                        if (!userSnap.hasData) {
                           return const ListTile(title: Text("Loading..."));
+                        }
                         final userData =
                             userSnap.data?.data() as Map<String, dynamic>?;
                         final username =

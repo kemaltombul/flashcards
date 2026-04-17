@@ -917,7 +917,7 @@ class _AddWordPageState extends State<AddWordPage>
                         ),
                       ),
   // --- Collection Selector ---
-                        const SizedBox(height: 15),
+                        const SizedBox(height: 10),
 
 
                       Center(

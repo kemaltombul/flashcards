@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../models/user_profile.dart';
-import 'migration_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -250,25 +249,9 @@ class ProfilePage extends StatelessWidget {
                   },
                 ),
 
-                const SizedBox(height: 24),
-
-                // ── Developer Tools ──────────────────────
-                _sectionLabel('Developer Tools'),
-                const SizedBox(height: 12),
-                _actionTile(
-                  icon: Icons.build_circle_outlined,
-                  title: '🛠️ Word Migration',
-                  color: Colors.deepOrange,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MigrationPage(),
-                    ),
-                  ),
-                ),
-
                 const SizedBox(height: 48),
-                _sectionLabel('Get in touch'),
+
+                // ── Contact ──────────────────────────────
                 const SizedBox(height: 12),
                 _contactTile(
                   icon: Icons.mail_outline_rounded,

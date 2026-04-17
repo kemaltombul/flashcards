@@ -2,10 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ═══════════════════════════════════════════════════════════════
-    // YARDIMCI FONKSİYONLAR
-    // ═══════════════════════════════════════════════════════════════
-
     function isLoggedIn() {
       return request.auth != null;
     }
@@ -32,13 +28,19 @@ service cloud.firestore {
       return isCollectionOwner(collectionId) || isCollectionEditor(collectionId);
     }
 
+    function isAdmin() {
+      return isLoggedIn() && request.auth.uid == 'CQk9Sf8MK4VwyBkQNjYK3ZdlzL13';
+    }
 
     // ═══════════════════════════════════════════════════════════════
-    // 1. KULLANICI PROFİLLERİ  /users/{userId}
+    // 1. KULLANICI PROFİLLERİ
     // ═══════════════════════════════════════════════════════════════
     match /users/{userId} {
 
-      allow read: if isLoggedIn();
+      // get: kendi profilini + editör olarak eklendiği profili görüntüleme
+      allow get:    if isLoggedIn();
+      // list: username sorgusu için gerekli (addEditorByUsername)
+      allow list:   if isLoggedIn();
 
       allow create: if isSelf(userId)
         && request.resource.data.keys().hasAll(['uid', 'username'])
@@ -53,20 +55,14 @@ service cloud.firestore {
 
       match /word_stats/{wordId} {
         allow read:   if isSelf(userId);
-
-        allow create: if isSelf(userId)
-          && request.resource.data.keys().hasAll(['collection_id', 'view_count'])
-          && request.resource.data.collection_id is string
-          && request.resource.data.view_count    is int;
-
+        allow create: if isSelf(userId);
         allow update: if isSelf(userId);
         allow delete: if isSelf(userId);
       }
     }
 
-
     // ═══════════════════════════════════════════════════════════════
-    // 2. KOLEKSİYONLAR  /collections/{collectionId}
+    // 2. KOLEKSİYONLAR
     // ═══════════════════════════════════════════════════════════════
     match /collections/{collectionId} {
 
@@ -99,9 +95,8 @@ service cloud.firestore {
         && resource.data.owner_id == request.auth.uid;
     }
 
-
     // ═══════════════════════════════════════════════════════════════
-    // 3. KELİMELER  /words/{wordId}
+    // 3. KELİMELER
     // ═══════════════════════════════════════════════════════════════
     match /words/{wordId} {
 
@@ -123,15 +118,12 @@ service cloud.firestore {
         && isCollectionMember(resource.data.collection_id);
     }
 
-
     // ═══════════════════════════════════════════════════════════════
-    // 4. APP LOGS  /app_logs/{logId}
+    // 4. APP LOGS
     // ═══════════════════════════════════════════════════════════════
     match /app_logs/{logId} {
-      // Tüm authenticated kullanıcılar log yazabilir
       allow write: if isLoggedIn();
-      // Sadece admin okuyabilir
-      allow read: if request.auth.uid == 'CQk9Sf8MK4VwyBkQNjYK3ZdlzL13';
+      allow read:  if isAdmin();
     }
 
   }

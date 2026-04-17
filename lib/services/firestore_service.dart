@@ -228,6 +228,7 @@ class FirestoreService {
     });
   }
 
+
   Future<String> addEditorByUsername(
     String collectionId,
     String targetUsername,
@@ -244,12 +245,7 @@ class FirestoreService {
           .get();
 
       if (userSnap.docs.isEmpty) {
-        _log.warning(
-          op,
-          '"$targetUsername" kullanıcısı bulunamadı.',
-          meta: {'collection_id': collectionId},
-        );
-        return "User with username '$targetUsername' not found";
+        return "User '$targetUsername' not found";
       }
 
       final targetUid = userSnap.docs.first.id;
@@ -265,14 +261,12 @@ class FirestoreService {
         op,
         e,
         stackTrace: st,
-        meta: {
-          'collection_id': collectionId,
-          'target_username': targetUsername,
-        },
+        meta: {'collection_id': collectionId, 'target_username': targetUsername},
       );
       return 'Firebase Error: $e';
     }
   }
+
 
   Future<void> removeEditorFromCollection(
     String collectionId,
